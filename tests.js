@@ -137,6 +137,63 @@ test('saveState returns false on throw', () => {
   assertEqual(L.saveState(st, L.emptyState()), false);
 });
 
+// ---- Task 2: spin geometry and slice colours ----
+
+const TAU = Math.PI * 2;
+const fixed = (v) => () => v;
+
+test('pickIndex stays in range', () => {
+  assertEqual(L.pickIndex(5, fixed(0)), 0);
+  assertEqual(L.pickIndex(5, fixed(0.999999)), 4);
+  assertEqual(L.pickIndex(5, fixed(1)), 4, 'clamped');
+  assertEqual(L.pickIndex(1, fixed(0.5)), 0);
+});
+
+test('targetRotation lands on requested slice', () => {
+  for (const n of [1, 2, 3, 7, 12]) {
+    for (let index = 0; index < n; index++) {
+      for (const rv of [0, 0.5, 0.9999]) {
+        for (const current of [0, 1.3, 40]) {
+          const r = L.targetRotation(current, index, n, fixed(rv));
+          const label = `n=${n} i=${index} rand=${rv} cur=${current}`;
+          assertEqual(L.indexAtPointer(r, n), index, label);
+          assert(r > current, `${label}: moves forward`);
+          assert(r - current >= 5 * TAU - TAU, `${label}: at least ~5 turns`);
+          assert(r - current <= 9 * TAU, `${label}: at most ~8 turns`);
+        }
+      }
+    }
+  }
+});
+
+test('targetRotation keeps off borders', () => {
+  for (const n of [2, 5, 9]) {
+    const w = TAU / n;
+    for (const rv of [0, 0.25, 0.5, 0.75, 0.9999]) {
+      const r = L.targetRotation(0.7, 1, n, fixed(rv));
+      const under = (((-r) % TAU) + TAU) % TAU;
+      const frac = under / w - 1; // position inside slice 1
+      assert(frac >= 0.15 - 1e-9 && frac <= 0.85 + 1e-9, `n=${n} rand=${rv} frac=${frac}`);
+    }
+  }
+});
+
+test('sliceColors no adjacent repeats', () => {
+  for (let n = 1; n <= 20; n++) {
+    const c = L.sliceColors(n, 6);
+    assertEqual(c.length, n, `length n=${n}`);
+    for (let i = 0; i < n - 1; i++) assert(c[i] !== c[i + 1], `n=${n} i=${i} ${show(c)}`);
+    if (n > 1) assert(c[n - 1] !== c[0], `wrap n=${n} ${show(c)}`);
+    assert(c.every((x) => Number.isInteger(x) && x >= 0 && x < 6), `range n=${n}`);
+  }
+});
+
+test('easeOutCubic endpoints', () => {
+  assertEqual(L.easeOutCubic(0), 0);
+  assertEqual(L.easeOutCubic(1), 1);
+  assert(L.easeOutCubic(0.5) > 0.5, 'decelerates');
+});
+
 // ---- report ----
 const failed = results.filter((r) => !r.ok);
 const summary = `${failed.length ? 'FAIL' : 'PASS'} ${failed.length ? failed.length : results.length}`;
