@@ -170,10 +170,10 @@ button { cursor: pointer; }
   transition: transform 120ms ease-out, box-shadow 120ms ease-out;
 }
 
-.hub:hover:not(:disabled) { transform: scale(1.04); }
-.hub:active:not(:disabled) { transform: scale(0.96); }
+.hub:hover:not(:disabled, [aria-disabled="true"]) { transform: scale(1.04); }
+.hub:active:not(:disabled, [aria-disabled="true"]) { transform: scale(0.96); }
 .hub:focus-visible { outline-color: var(--ticket); outline-offset: 0.55rem; }
-.hub:disabled { cursor: default; }
+.hub:disabled, .hub[aria-disabled="true"] { cursor: default; }
 
 .wheel-empty {
   position: absolute;

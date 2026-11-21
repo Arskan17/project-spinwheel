@@ -60,7 +60,9 @@ function render() {
   renderPile();
   const n = state.wheel.length;
   el.spin.hidden = n === 0;
-  el.spin.disabled = spinning || n === 0;
+  // Not `disabled` while spinning: a disabled button drops keyboard focus.
+  el.spin.disabled = n === 0;
+  el.spin.setAttribute('aria-disabled', String(spinning));
   el.empty.hidden = n > 0;
   drawWheel();
 }
@@ -277,7 +279,7 @@ function spin() {
 
   spinning = true;
   el.side.inert = true;
-  el.spin.disabled = true;
+  el.spin.setAttribute('aria-disabled', 'true');
 
   const t0 = performance.now();
   let lastIndex = indexAtPointer(from, n);
