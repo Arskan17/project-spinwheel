@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Running tests…</title>
+  <style>body { font: 14px/1.5 ui-monospace, monospace; margin: 2rem; } </style>
+</head>
+<body>
+  <h1>Spinwheel logic tests</h1>
+  <pre id="out">Running…</pre>
+  <script type="module">
+    import('./tests.js').catch((e) => {
+      document.title = 'FAIL load';
+      document.getElementById('out').textContent = 'FAIL could not load tests: ' + e.message;
+    });
+  </script>
+</body>
+</html>
