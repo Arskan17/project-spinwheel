@@ -50,6 +50,17 @@
         <ul class="tickets" id="pile-list"></ul>
       </section>
 
+      <section class="backup" aria-labelledby="backup-heading">
+        <h2 id="backup-heading">Backup &amp; import</h2>
+        <p class="backup-hint">Export saves everything to a .json file. Import takes that file back, or a list of project names, one per line (.txt or .csv).</p>
+        <div class="backup-row">
+          <button type="button" id="export">Export</button>
+          <button type="button" id="import">Import…</button>
+          <input type="file" id="import-file" accept=".json,.txt,.csv,application/json,text/plain,text/csv" hidden>
+        </div>
+        <p class="backup-status" id="backup-status" role="status"></p>
+      </section>
+
       <p class="save-note" id="save-note">Saved in this browser.</p>
     </div>
   </main>
@@ -61,6 +72,19 @@
       <button class="primary" id="result-keep" type="button" autofocus>Work on this</button>
       <button id="result-again" type="button">Spin again</button>
     </div>
+  </dialog>
+
+  <dialog class="result" id="import-dialog" aria-labelledby="import-title" aria-describedby="import-text">
+    <form method="dialog">
+      <p class="result-lead">Import backup</p>
+      <h2 class="import-title" id="import-title"></h2>
+      <p class="import-text" id="import-text">Merge keeps your projects and adds the new ones. Replace swaps everything here for what’s in the file.</p>
+      <div class="result-actions">
+        <button class="primary" value="merge" autofocus>Merge</button>
+        <button value="replace">Replace</button>
+        <button value="cancel">Cancel</button>
+      </div>
+    </form>
   </dialog>
 
   <p class="visually-hidden" id="announce" aria-live="polite"></p>
