@@ -156,7 +156,8 @@ export function mergeBackup(state, incoming) {
   return { state: { wheel, pile }, added };
 }
 
-const NAME_HEADERS = new Set(['name', 'names', 'project', 'projects']);
+// Header cells skipped at the top of a CSV (English and German).
+const NAME_HEADERS = new Set(['name', 'names', 'project', 'projects', 'projekt', 'projekte']);
 
 // First field of a CSV line. Handles quotes ("a, b" and "say ""hi""") and
 // comma, semicolon (Excel in many locales) or tab as the delimiter.

@@ -299,6 +299,7 @@ test('parseNameList CSV: first column, quotes, delimiters, header', () => {
     ['Shed', 'Bike, oil chain', 'Say "hi"', 'Tabbed', 'Semi'],
   );
   assertEqual(L.parseNameList('Shed\nBike', { csv: true }), ['Shed', 'Bike'], 'no header');
+  assertEqual(L.parseNameList('Projekt;Prio\nShed;1', { csv: true }), ['Shed'], 'German header');
 });
 
 test('addNames applies addProject rules', () => {
