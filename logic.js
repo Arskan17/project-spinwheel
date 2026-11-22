@@ -15,9 +15,10 @@ function newId() {
 }
 
 const sameName = (a, b) => a.toLowerCase() === b.toLowerCase();
+const cleanName = (name) => String(name ?? '').trim().slice(0, MAX_NAME_LENGTH).trim();
 
 export function addProject(state, name) {
-  const clean = String(name ?? '').trim().slice(0, MAX_NAME_LENGTH).trim();
+  const clean = cleanName(name);
   if (!clean) return { state, error: 'empty' };
   if (state.wheel.some((p) => sameName(p.name, clean))) return { state, error: 'duplicate' };
   return {
@@ -58,21 +59,26 @@ export function returnToWheel(state, id) {
 const isObj = (v) => v !== null && typeof v === 'object';
 const validName = (v) => typeof v === 'string' && v.trim().length > 0;
 const isWheelItem = (p) => isObj(p) && typeof p.id === 'string' && validName(p.name);
-const isPileItem = (p) =>
-  isWheelItem(p) && typeof p.done === 'boolean' && typeof p.pickedAt === 'number';
+// Dates outside ±8.64e15 ms make Intl.DateTimeFormat throw while rendering.
+const isTime = (v) => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= 8.64e15;
+const isPileItem = (p) => isWheelItem(p) && typeof p.done === 'boolean' && isTime(p.pickedAt);
+
+// Keep only well-formed items and known fields. Returns null for non-objects.
+function pickState(data) {
+  if (!isObj(data) || Array.isArray(data)) return null;
+  const wheel = Array.isArray(data.wheel) ? data.wheel.filter(isWheelItem) : [];
+  const pile = Array.isArray(data.pile) ? data.pile.filter(isPileItem) : [];
+  return {
+    wheel: wheel.map(({ id, name }) => ({ id, name })),
+    pile: pile.map(({ id, name, done, pickedAt }) => ({ id, name, done, pickedAt })),
+  };
+}
 
 export function loadState(storage) {
   try {
     const raw = storage.getItem(STORAGE_KEY);
     if (raw == null) return emptyState();
-    const data = JSON.parse(raw);
-    if (!isObj(data) || Array.isArray(data)) return emptyState();
-    const wheel = Array.isArray(data.wheel) ? data.wheel.filter(isWheelItem) : [];
-    const pile = Array.isArray(data.pile) ? data.pile.filter(isPileItem) : [];
-    return {
-      wheel: wheel.map(({ id, name }) => ({ id, name })),
-      pile: pile.map(({ id, name, done, pickedAt }) => ({ id, name, done, pickedAt })),
-    };
+    return pickState(JSON.parse(raw)) ?? emptyState();
   } catch {
     return emptyState();
   }
@@ -85,6 +91,106 @@ export function saveState(storage, state) {
   } catch {
     return false;
   }
+}
+
+// ---- Import and export ----
+// A backup is the saved state plus a small header, as pretty-printed JSON.
+// A name list is plain text, one project per line; for CSV the first column.
+
+export const BACKUP_APP = 'project-spinwheel';
+export const BACKUP_VERSION = 1;
+
+const stripBom = (text) => String(text ?? '').replace(/^﻿/, '');
+const pad2 = (n) => String(n).padStart(2, '0');
+
+export function exportState(state, now) {
+  return JSON.stringify({
+    app: BACKUP_APP,
+    version: BACKUP_VERSION,
+    exportedAt: new Date(now).toISOString(),
+    wheel: state.wheel.map(({ id, name }) => ({ id, name })),
+    pile: state.pile.map(({ id, name, done, pickedAt }) => ({ id, name, done, pickedAt })),
+  }, null, 2) + '\n';
+}
+
+// Local date, so an evening export isn't named after tomorrow.
+export function exportFileName(date) {
+  return `spinwheel-${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}.json`;
+}
+
+// Parse a backup file (or a raw localStorage value). Returns a clean state,
+// or null when the text isn't JSON with a wheel or pile list.
+export function parseBackup(text) {
+  let data;
+  try {
+    data = JSON.parse(stripBom(text));
+  } catch {
+    return null;
+  }
+  if (!isObj(data) || (!Array.isArray(data.wheel) && !Array.isArray(data.pile))) return null;
+  const picked = pickState(data);
+  const ids = new Set();
+  const firstId = (p) => !ids.has(p.id) && ids.add(p.id);
+  const tidy = (list) =>
+    list.map((p) => ({ ...p, name: cleanName(p.name) })).filter((p) => p.name && firstId(p));
+  const wheel = [];
+  for (const p of tidy(picked.wheel)) {
+    if (!wheel.some((q) => sameName(q.name, p.name))) wheel.push(p);
+  }
+  return { wheel, pile: tidy(picked.pile) };
+}
+
+// Add a backup to the current state. Items whose id is already here are
+// skipped, as are wheel names already on the wheel. The pile stays newest first.
+export function mergeBackup(state, incoming) {
+  const ids = new Set([...state.wheel, ...state.pile].map((p) => p.id));
+  const wheel = [...state.wheel];
+  for (const p of incoming.wheel) {
+    if (ids.has(p.id) || wheel.some((q) => sameName(q.name, p.name))) continue;
+    wheel.push(p);
+    ids.add(p.id);
+  }
+  const newPile = incoming.pile.filter((p) => !ids.has(p.id));
+  const pile = [...state.pile, ...newPile].sort((a, b) => b.pickedAt - a.pickedAt);
+  const added = wheel.length - state.wheel.length + newPile.length;
+  return { state: { wheel, pile }, added };
+}
+
+// Header cells skipped at the top of a CSV (English and German).
+const NAME_HEADERS = new Set(['name', 'names', 'project', 'projects', 'projekt', 'projekte']);
+
+// First field of a CSV line. Handles quotes ("a, b" and "say ""hi""") and
+// comma, semicolon (Excel in many locales) or tab as the delimiter.
+function firstCsvField(line) {
+  const s = line.trimStart();
+  if (!s.startsWith('"')) return s.split(/[,;\t]/)[0];
+  let out = '';
+  for (let i = 1; i < s.length; i++) {
+    if (s[i] !== '"') out += s[i];
+    else if (s[i + 1] === '"') { out += '"'; i++; }
+    else break;
+  }
+  return out;
+}
+
+export function parseNameList(text, { csv = false } = {}) {
+  const names = stripBom(text)
+    .split(/\r\n|\n|\r/)
+    .map((line) => (csv ? firstCsvField(line) : line).trim())
+    .filter(Boolean);
+  if (csv && names.length && NAME_HEADERS.has(names[0].toLowerCase())) names.shift();
+  return names;
+}
+
+// Add names to the wheel with the same rules as typing them in.
+export function addNames(state, names) {
+  let next = state;
+  let added = 0;
+  for (const name of names) {
+    const r = addProject(next, name);
+    if (!r.error) { next = r.state; added++; }
+  }
+  return { state: next, added, skipped: names.length - added };
 }
 
 // ---- Spin geometry ----

@@ -1,6 +1,7 @@
 import {
   addProject, removeProject, confirmPick, toggleDone, returnToWheel,
   loadState, saveState, STORAGE_KEY,
+  exportState, exportFileName, parseBackup, mergeBackup, parseNameList, addNames,
   pickIndex, targetRotation, indexAtPointer, sliceColors, easeOutCubic,
 } from './logic.js';
 
@@ -13,6 +14,7 @@ const FONT = '"Bricolage Grotesque", system-ui, sans-serif';
 const TAU = Math.PI * 2;
 const SPIN_MS = 4500;
 const SPIN_MS_REDUCED = 600;
+const MAX_IMPORT_BYTES = 1024 * 1024;
 
 const $ = (id) => document.getElementById(id);
 const el = {
@@ -23,6 +25,8 @@ const el = {
   pileList: $('pile-list'), pileCount: $('pile-count'), pileEmpty: $('pile-empty'),
   saveNote: $('save-note'), announce: $('announce'),
   dialog: $('result'), resultName: $('result-name'), keep: $('result-keep'), again: $('result-again'),
+  exportBtn: $('export'), importBtn: $('import'), importFile: $('import-file'),
+  backupStatus: $('backup-status'), importDialog: $('import-dialog'), importTitle: $('import-title'),
 };
 
 const storage = (() => { try { return window.localStorage; } catch { return null; } })();
@@ -33,6 +37,7 @@ let state = loadState(storage);
 let rotation = 0;
 let spinning = false;
 let arrivingId = null;
+let pendingImport = null;
 
 function rand() {
   const a = new Uint32Array(1);
@@ -378,6 +383,111 @@ el.pileList.addEventListener('click', (e) => {
   commit(returnToWheel(state, btn.dataset.id), `${name} is back on the wheel.`);
   focusAfterRemoval(el.pileList, '.back', index, el.input);
 });
+
+// ---------- Backup and import ----------
+
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+const describe = (s) => `${s.wheel.length} on the wheel, ${plural(s.pile.length, 'ticket')}`;
+
+function setStatus(message, isError = false) {
+  el.backupStatus.textContent = message;
+  el.backupStatus.classList.toggle('warn', isError);
+}
+
+el.exportBtn.addEventListener('click', () => {
+  const now = new Date();
+  const blob = new Blob([exportState(state, now.getTime())], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = make('a', { href: url, download: exportFileName(now) });
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+  setStatus(`Exported ${describe(state)}.`);
+});
+
+el.importBtn.addEventListener('click', () => el.importFile.click());
+
+el.importFile.addEventListener('change', async () => {
+  const file = el.importFile.files[0];
+  el.importFile.value = ''; // so choosing the same file again still fires
+  if (!file) return;
+  if (file.size > MAX_IMPORT_BYTES) {
+    setStatus('That file is too big to be a spinwheel backup or name list.', true);
+    return;
+  }
+  let text;
+  try {
+    text = await file.text();
+  } catch {
+    setStatus('Couldn’t read that file.', true);
+    return;
+  }
+  const name = file.name.toLowerCase();
+  if (name.endsWith('.json') || text.trimStart().replace(/^﻿/, '').startsWith('{')) {
+    importBackup(text);
+  } else {
+    importNames(text, name.endsWith('.csv'));
+  }
+});
+
+function importBackup(text) {
+  const incoming = parseBackup(text);
+  if (!incoming) {
+    setStatus('That file isn’t a spinwheel backup.', true);
+    return;
+  }
+  if (!incoming.wheel.length && !incoming.pile.length) {
+    setStatus('That backup has no projects in it.', true);
+    return;
+  }
+  if (!state.wheel.length && !state.pile.length) {
+    commit(incoming);
+    setStatus(`Imported ${describe(incoming)}.`);
+    return;
+  }
+  pendingImport = incoming;
+  el.importTitle.textContent = describe(incoming);
+  el.importDialog.returnValue = '';
+  el.importDialog.showModal();
+}
+
+el.importDialog.addEventListener('close', () => {
+  const incoming = pendingImport;
+  pendingImport = null;
+  if (!incoming) return;
+  const choice = el.importDialog.returnValue;
+  if (choice === 'replace') {
+    commit(incoming);
+    setStatus(`Replaced with the backup: ${describe(incoming)}.`);
+  } else if (choice === 'merge') {
+    const total = incoming.wheel.length + incoming.pile.length;
+    const { state: next, added } = mergeBackup(state, incoming);
+    commit(next);
+    const skipped = total - added;
+    setStatus(added
+      ? `Added ${plural(added, 'project')} from the backup.${skipped ? ` ${skipped} ${skipped === 1 ? 'was' : 'were'} already here.` : ''}`
+      : 'Nothing new: everything in that backup is already here.');
+  } else {
+    setStatus('Import cancelled.');
+  }
+  el.importBtn.focus();
+});
+
+function importNames(text, csv) {
+  const names = parseNameList(text, { csv });
+  if (!names.length) {
+    setStatus('No project names found in that file.', true);
+    return;
+  }
+  const { state: next, added, skipped } = addNames(state, names);
+  if (!added) {
+    setStatus(`Nothing new: ${names.length === 1 ? 'that project is' : `all ${names.length} are`} already on the wheel.`);
+    return;
+  }
+  commit(next);
+  setStatus(`Added ${plural(added, 'project')} to the wheel.${skipped ? ` Skipped ${skipped} already on it.` : ''}`);
+}
 
 // Keep two open tabs in step.
 window.addEventListener('storage', (e) => {
