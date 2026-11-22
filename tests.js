@@ -194,6 +194,120 @@ test('easeOutCubic endpoints', () => {
   assert(L.easeOutCubic(0.5) > 0.5, 'decelerates');
 });
 
+// ---- Import and export ----
+
+const sample = () => {
+  let s = withProjects('A', 'B', 'C');
+  s = L.confirmPick(s, s.wheel[0].id, 1000);
+  s = L.toggleDone(L.confirmPick(s, s.wheel[0].id, 2000), s.wheel[0].id);
+  return s; // wheel [C], pile [B done, A]
+};
+
+test('exportState round-trips through parseBackup', () => {
+  const s = sample();
+  const text = L.exportState(s, Date.UTC(2026, 10, 22, 9));
+  const data = JSON.parse(text);
+  assertEqual([data.app, data.version, data.exportedAt], ['project-spinwheel', 1, '2026-11-22T09:00:00.000Z']);
+  assertEqual(L.parseBackup(text), s);
+});
+
+test('exportFileName uses the local date', () => {
+  assertEqual(L.exportFileName(new Date(2026, 0, 5, 23, 59)), 'spinwheel-2026-01-05.json');
+});
+
+test('parseBackup rejects non-backups', () => {
+  for (const raw of ['', 'not json', 'null', '5', '"x"', '[]', '{}', '{"wheel":5}', 'A\nB']) {
+    assertEqual(L.parseBackup(raw), null, raw);
+  }
+});
+
+test('parseBackup accepts a raw saved state and a BOM', () => {
+  const s = sample();
+  assertEqual(L.parseBackup('﻿' + JSON.stringify(s)), s);
+  assertEqual(L.parseBackup('{"pile":[]}'), L.emptyState(), 'pile only');
+});
+
+test('parseBackup cleans items', () => {
+  const s = L.parseBackup(JSON.stringify({
+    wheel: [
+      { id: 'a', name: '  Shed  ', extra: 1 }, { id: 'b', name: 'shed' }, { id: 'c', name: '   ' },
+      { id: 'a', name: 'Repeat id' }, { id: 'd', name: 'x'.repeat(80) }, { name: 'No id' },
+    ],
+    pile: [
+      { id: 'a', name: 'Same id as wheel', done: false, pickedAt: 1 },
+      { id: 'e', name: 'Far future', done: false, pickedAt: 1e20 },
+      { id: 'f', name: 'Ok', done: true, pickedAt: 5 },
+    ],
+  }));
+  assertEqual(s.wheel, [{ id: 'a', name: 'Shed' }, { id: 'd', name: 'x'.repeat(60) }]);
+  assertEqual(s.pile, [{ id: 'f', name: 'Ok', done: true, pickedAt: 5 }]);
+});
+
+test('loadState drops pile items with out-of-range dates', () => {
+  const raw = JSON.stringify({ wheel: [], pile: [{ id: 'y', name: 'P', done: false, pickedAt: 1e20 }] });
+  assertEqual(L.loadState(fakeStorage({ 'spinwheel:v1': raw })), L.emptyState());
+});
+
+test('mergeBackup adds new items and skips known ones', () => {
+  const current = {
+    wheel: [{ id: 'w1', name: 'Shed' }],
+    pile: [{ id: 'p1', name: 'Old', done: false, pickedAt: 100 }],
+  };
+  const incoming = {
+    wheel: [{ id: 'w1', name: 'Shed renamed' }, { id: 'w2', name: 'SHED' }, { id: 'w3', name: 'Bike' }],
+    pile: [
+      { id: 'p1', name: 'Old', done: true, pickedAt: 100 },
+      { id: 'p2', name: 'Newer', done: true, pickedAt: 300 },
+      { id: 'p3', name: 'Oldest', done: false, pickedAt: 50 },
+    ],
+  };
+  const before = show(current);
+  const { state, added } = L.mergeBackup(current, incoming);
+  assertEqual(names(state.wheel), ['Shed', 'Bike']);
+  assertEqual(names(state.pile), ['Newer', 'Old', 'Oldest']);
+  assertEqual(state.pile[1].done, false, 'keeps current copy');
+  assertEqual(added, 3);
+  assertEqual(show(current), before, 'no mutation');
+});
+
+test('mergeBackup into empty state is the backup', () => {
+  const s = sample();
+  assertEqual(L.mergeBackup(L.emptyState(), s), { state: s, added: 3 });
+});
+
+test('parseNameList plain text: one per line', () => {
+  assertEqual(
+    L.parseNameList('﻿Fix bike, oil chain\r\n\n  Learn Rust  \rName\n'),
+    ['Fix bike, oil chain', 'Learn Rust', 'Name'],
+  );
+  assertEqual(L.parseNameList(''), []);
+});
+
+test('parseNameList CSV: first column, quotes, delimiters, header', () => {
+  const csv = [
+    'Project,Priority',
+    'Shed,high',
+    '"Bike, oil chain",low',
+    '"Say ""hi""";x',
+    'Tabbed\tcol',
+    'Semi;colon',
+    ',empty first',
+    '',
+  ].join('\n');
+  assertEqual(
+    L.parseNameList(csv, { csv: true }),
+    ['Shed', 'Bike, oil chain', 'Say "hi"', 'Tabbed', 'Semi'],
+  );
+  assertEqual(L.parseNameList('Shed\nBike', { csv: true }), ['Shed', 'Bike'], 'no header');
+});
+
+test('addNames applies addProject rules', () => {
+  const s = withProjects('Shed');
+  const r = L.addNames(s, ['Bike', 'shed', 'bike', 'x'.repeat(70)]);
+  assertEqual(names(r.state.wheel), ['Shed', 'Bike', 'x'.repeat(60)]);
+  assertEqual([r.added, r.skipped], [2, 2]);
+});
+
 // ---- report ----
 const failed = results.filter((r) => !r.ok);
 const summary = `${failed.length ? 'FAIL' : 'PASS'} ${failed.length ? failed.length : results.length}`;
