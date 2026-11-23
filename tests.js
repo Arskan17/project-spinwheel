@@ -309,6 +309,55 @@ test('addNames applies addProject rules', () => {
   assertEqual([r.added, r.skipped], [2, 2]);
 });
 
+// ---- Swipe deck ----
+
+const seq = (...vals) => { let i = 0; return () => vals[i++ % vals.length]; };
+
+test('shuffle keeps every item and leaves the input alone', () => {
+  const input = ['a', 'b', 'c', 'd'];
+  const out = L.shuffle(input, Math.random);
+  assertEqual([...out].sort(), input);
+  assertEqual(input, ['a', 'b', 'c', 'd'], 'input untouched');
+  assertEqual(L.shuffle(input, () => 0.999999), input, 'rand near 1 is identity');
+});
+
+test('drawCard deals each project once per round, then reshuffles', () => {
+  const s = withProjects('A', 'B', 'C');
+  const ids = s.wheel.map((p) => p.id);
+  let deck = [];
+  let last = null;
+  const seen = [];
+  for (let i = 0; i < 3; i++) {
+    const r = L.drawCard(deck, s.wheel, Math.random, last);
+    seen.push(r.id);
+    deck = r.deck;
+    last = r.id;
+  }
+  assertEqual([...seen].sort(), [...ids].sort(), 'one round covers the wheel');
+  const next = L.drawCard(deck, s.wheel, Math.random, last);
+  assert(ids.includes(next.id), 'new round deals again');
+  assertEqual(next.deck.length, 2);
+});
+
+test('drawCard never repeats the last card first after a reshuffle', () => {
+  const s = withProjects('A', 'B');
+  const [a, b] = s.wheel.map((p) => p.id);
+  for (const r of [0, 0.5, 0.99]) {
+    assertEqual(L.drawCard([], s.wheel, seq(r), a).id, b, `rand ${r}`);
+  }
+});
+
+test('drawCard skips removed projects and handles an empty or single wheel', () => {
+  const s = withProjects('A', 'B', 'C');
+  const [a, b, c] = s.wheel.map((p) => p.id);
+  const smaller = L.removeProject(s, b);
+  assertEqual(L.drawCard([b, c], smaller.wheel, Math.random, a), { id: c, deck: [] });
+  assertEqual(L.drawCard([a], [], Math.random, a), { id: null, deck: [] });
+  const one = withProjects('Solo');
+  const solo = one.wheel[0].id;
+  assertEqual(L.drawCard([], one.wheel, Math.random, solo).id, solo, 'only card comes back');
+});
+
 // ---- report ----
 const failed = results.filter((r) => !r.ok);
 const summary = `${failed.length ? 'FAIL' : 'PASS'} ${failed.length ? failed.length : results.length}`;
