@@ -193,6 +193,33 @@ export function addNames(state, names) {
   return { state: next, added, skipped: names.length - added };
 }
 
+// ---- Swipe deck ----
+// Swipe mode deals the wheel's projects one at a time in random order. A deck
+// is the list of ids still to come this round; when it runs out, the whole
+// wheel is shuffled into a new round.
+
+export function shuffle(list, rand) {
+  const out = [...list];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.min(i, Math.floor(rand() * (i + 1)));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+// Draw the next card. Ids no longer on the wheel are dropped. `lastId` (the
+// card just shown) is never dealt straight back unless it's the only one left.
+// Projects added mid-round join at the next reshuffle.
+export function drawCard(deck, wheel, rand, lastId = null) {
+  const onWheel = new Set(wheel.map((p) => p.id));
+  let rest = deck.filter((id) => onWheel.has(id) && id !== lastId);
+  if (!rest.length) {
+    rest = shuffle([...onWheel], rand);
+    if (rest.length > 1 && rest[0] === lastId) [rest[0], rest[1]] = [rest[1], rest[0]];
+  }
+  return { id: rest[0] ?? null, deck: rest.slice(1) };
+}
+
 // ---- Spin geometry ----
 // Slice i spans [i*w, (i+1)*w) radians clockwise from the pointer (top) when
 // the wheel's rotation is 0, with w = 2π/n. Rotating the wheel clockwise by r

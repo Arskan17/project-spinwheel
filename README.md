@@ -7,6 +7,20 @@ a ticket in **Working on & done**, where you can tick it off or put it back.
 Everything is saved in your browser (localStorage). It stays on that browser
 and device, and clearing the site's data wipes it.
 
+## Spin or swipe
+
+The switch above the wheel picks how you choose:
+
+- **Spin** spins the wheel, as above.
+- **Swipe** deals your projects one card at a time in random order. Swipe
+  right (or press →, or **Work on this**) and it becomes a ticket, same as
+  confirming a spin. Swipe left (or press ←, or **Skip**) and the next card
+  comes up. Once you've skipped every card the deck reshuffles and keeps
+  going, and the card you just skipped never comes straight back. Projects
+  you add mid-round join at the next shuffle.
+
+The app remembers which mode you used last.
+
 ## Backup and import
 
 Under **Backup & import**:
@@ -49,7 +63,7 @@ python3 -m http.server 8000
 
 ## Tests
 
-The logic in `logic.js` (list changes, storage, spin maths) has tests in
+The logic in `logic.js` (list changes, storage, spin maths, swipe deck) has tests in
 `tests.js`. Either:
 
 - open `http://localhost:8000/tests.html`, where the page title shows `PASS <n>`, or
@@ -71,6 +85,6 @@ The logic in `logic.js` (list changes, storage, spin maths) has tests in
 |---|---|
 | `index.html` | Page markup |
 | `style.css` | Look and layout |
-| `app.js` | Wheel drawing, spin animation, buttons, saving, export and import |
-| `logic.js` | Pure state, spin maths and backup/name-list parsing, no DOM |
+| `app.js` | Wheel drawing, spin animation, swipe deck, buttons, saving, export and import |
+| `logic.js` | Pure state, spin maths, swipe-deck shuffling and backup/name-list parsing, no DOM |
 | `tests.js`, `tests.html` | Tests for `logic.js` |

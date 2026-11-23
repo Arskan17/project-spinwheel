@@ -20,7 +20,30 @@
   </header>
 
   <main class="booth">
-    <section class="stage" aria-label="Wheel">
+    <section class="stage" aria-label="Pick a project">
+      <div class="modes" role="group" aria-label="How to pick">
+        <button type="button" class="mode" id="mode-spin" data-mode="spin" aria-pressed="true">Spin</button>
+        <button type="button" class="mode" id="mode-swipe" data-mode="swipe" aria-pressed="false">Swipe</button>
+      </div>
+
+      <div class="deck" id="deck" hidden>
+        <div class="deck-table">
+          <article class="card" id="card" tabindex="0" aria-roledescription="card"
+                   aria-describedby="deck-hint" aria-labelledby="card-lead card-name">
+            <span class="stamp stamp-yes" aria-hidden="true">Yes!</span>
+            <span class="stamp stamp-no" aria-hidden="true">Nope</span>
+            <p class="card-lead" id="card-lead">Work on this?</p>
+            <h2 class="card-name" id="card-name"></h2>
+          </article>
+          <p class="deck-empty" id="deck-empty" hidden>Add a project and it joins the deck.</p>
+        </div>
+        <div class="deck-actions" id="deck-actions">
+          <button type="button" class="deck-no" id="deck-no">✕ Skip</button>
+          <button type="button" class="deck-yes" id="deck-yes">✓ Work on this</button>
+        </div>
+        <p class="deck-hint" id="deck-hint">Swipe right to work on it, left to skip. Arrow keys work too.</p>
+      </div>
+
       <div class="wheel" id="wheel">
         <canvas id="wheel-canvas" aria-hidden="true"></canvas>
         <div class="pointer" id="pointer" aria-hidden="true"></div>

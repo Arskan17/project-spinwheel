@@ -550,3 +550,154 @@ button { cursor: pointer; }
     transition: none !important;
   }
 }
+
+/* ---------- Mode switch ---------- */
+
+.modes {
+  display: flex;
+  width: fit-content;
+  margin: 0 auto 1.25rem;
+  padding: 0.25rem;
+  border-radius: 999px;
+  background: var(--booth);
+}
+
+.mode {
+  padding: 0.45rem 1.4rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--haze);
+  font-weight: 700;
+}
+
+.mode[aria-pressed="true"] {
+  background: var(--bulb);
+  color: var(--ink);
+}
+
+.wheel[hidden], .deck[hidden] { display: none; }
+
+/* ---------- Swipe deck ---------- */
+
+.deck {
+  width: min(100%, 26rem);
+  margin-inline: auto;
+}
+
+.deck-table {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 22rem;
+}
+
+.card {
+  --notch: 1rem;
+  position: relative;
+  display: grid;
+  align-content: center;
+  width: 100%;
+  min-height: 22rem;
+  padding: 2.25rem 2rem;
+  border-radius: 0.5rem;
+  background: var(--ticket);
+  color: var(--ink);
+  cursor: grab;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-mask: radial-gradient(circle var(--notch) at 50% 0, #0000 98%, #000 100%),
+                radial-gradient(circle var(--notch) at 50% 100%, #0000 98%, #000 100%);
+  -webkit-mask-composite: source-in;
+  mask: radial-gradient(circle var(--notch) at 50% 0, #0000 98%, #000 100%),
+        radial-gradient(circle var(--notch) at 50% 100%, #0000 98%, #000 100%);
+  mask-composite: intersect;
+}
+
+.card[hidden] { display: none; }
+/* The notch mask clips anything outside the card, so the focus ring sits inside. */
+.card:focus-visible { outline: none; box-shadow: inset 0 0 0 0.25rem var(--ink); }
+.card.dragging { cursor: grabbing; }
+.card.settle { transition: transform 220ms cubic-bezier(.2, .9, .3, 1.2); }
+.card.fly { transition: transform 260ms ease-in, opacity 260ms ease-in; opacity: 0; }
+.card.enter { animation: deal 320ms cubic-bezier(.2, .9, .3, 1.15); }
+
+@keyframes deal {
+  from { opacity: 0; scale: 0.9; translate: 0 1.5rem; }
+  to { opacity: 1; scale: 1; translate: 0 0; }
+}
+
+.card-lead {
+  font-size: var(--step-1);
+  color: rgb(35 28 72 / 0.75);
+}
+
+.card-name {
+  margin-top: 0.35rem;
+  font-size: clamp(var(--step-2), 8vw, var(--step-4));
+  font-weight: 800;
+  font-stretch: 78%;
+  font-variation-settings: "opsz" 96;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.stamp {
+  position: absolute;
+  top: 1.5rem;
+  padding: 0.2rem 0.7rem;
+  border: 0.2rem solid currentColor;
+  border-radius: 0.4rem;
+  font-size: var(--step-1);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+}
+
+.stamp-yes { left: 1.25rem; color: #1F8A7F; rotate: -12deg; opacity: var(--yes, 0); }
+.stamp-no { right: 1.25rem; color: #D9432A; rotate: 12deg; opacity: var(--no, 0); }
+
+.deck-empty {
+  color: var(--haze);
+  font-size: var(--step-1);
+  text-align: center;
+  max-width: 20ch;
+}
+
+.deck-actions {
+  display: flex;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+.deck-actions[hidden] { display: none; }
+
+.deck-actions button {
+  padding: 0.75rem 1.4rem;
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.deck-no {
+  border: 2px solid var(--haze);
+  background: transparent;
+}
+
+.deck-no:hover { background: var(--booth); }
+
+.deck-yes {
+  border: 2px solid var(--bulb);
+  background: var(--bulb);
+  color: var(--ink);
+}
+
+.deck-hint {
+  margin-top: 0.75rem;
+  text-align: center;
+  color: var(--haze);
+  font-size: 0.9rem;
+}
