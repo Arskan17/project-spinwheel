@@ -2,6 +2,7 @@ import {
   addProject, removeProject, confirmPick, toggleDone, returnToWheel,
   loadState, saveState, STORAGE_KEY,
   exportState, exportFileName, parseBackup, mergeBackup, parseNameList, addNames,
+  drawCard,
   pickIndex, targetRotation, indexAtPointer, sliceColors, easeOutCubic,
 } from './logic.js';
 
@@ -15,6 +16,8 @@ const TAU = Math.PI * 2;
 const SPIN_MS = 4500;
 const SPIN_MS_REDUCED = 600;
 const MAX_IMPORT_BYTES = 1024 * 1024;
+const MODE_KEY = 'spinwheel:mode';
+const FLY_MS = 260;
 
 const $ = (id) => document.getElementById(id);
 const el = {
@@ -26,6 +29,9 @@ const el = {
   saveNote: $('save-note'), announce: $('announce'),
   dialog: $('result'), resultName: $('result-name'), keep: $('result-keep'), again: $('result-again'),
   exportBtn: $('export'), importBtn: $('import'), importFile: $('import-file'),
+  modeSpin: $('mode-spin'), modeSwipe: $('mode-swipe'),
+  deck: $('deck'), card: $('card'), cardName: $('card-name'), deckEmpty: $('deck-empty'),
+  deckActions: $('deck-actions'), deckYes: $('deck-yes'), deckNo: $('deck-no'),
   backupStatus: $('backup-status'), importDialog: $('import-dialog'), importTitle: $('import-title'),
 };
 
@@ -38,6 +44,10 @@ let rotation = 0;
 let spinning = false;
 let arrivingId = null;
 let pendingImport = null;
+let mode = (() => { try { return storage?.getItem(MODE_KEY) === 'swipe' ? 'swipe' : 'spin'; } catch { return 'spin'; } })();
+let deck = [];
+let cardId = null;
+let flying = false;
 
 function rand() {
   const a = new Uint32Array(1);
@@ -69,6 +79,8 @@ function render() {
   el.spin.disabled = n === 0;
   el.spin.setAttribute('aria-disabled', String(spinning));
   el.empty.hidden = n > 0;
+  renderMode();
+  renderCard();
   drawWheel();
 }
 
@@ -123,6 +135,134 @@ function renderPile() {
     return make('li', { className: classes.join(' ') }, [toggle, body, back]);
   }));
 }
+
+// ---------- Swipe mode ----------
+
+function renderMode() {
+  const swipe = mode === 'swipe';
+  el.modeSpin.setAttribute('aria-pressed', String(!swipe));
+  el.modeSwipe.setAttribute('aria-pressed', String(swipe));
+  el.wheel.hidden = swipe;
+  el.deck.hidden = !swipe;
+}
+
+// Keep the card valid: deal one if there's none, or if its project is gone.
+function renderCard() {
+  if (flying || mode !== 'swipe') return;
+  const before = cardId;
+  if (!state.wheel.some((p) => p.id === cardId)) {
+    ({ id: cardId, deck } = drawCard(deck, state.wheel, rand, cardId));
+  }
+  const card = state.wheel.find((p) => p.id === cardId);
+  el.card.hidden = !card;
+  el.deckActions.hidden = !card;
+  el.deckEmpty.hidden = Boolean(card);
+  if (!card) return;
+  el.cardName.textContent = card.name;
+  if (cardId !== before && mode === 'swipe') dealAnimation();
+}
+
+function dealAnimation() {
+  el.card.classList.remove('enter');
+  void el.card.offsetWidth;
+  el.card.classList.add('enter');
+}
+
+function setMode(next) {
+  if (mode === next || spinning) return;
+  mode = next;
+  cardId = null; // each visit starts a fresh shuffle
+  deck = [];
+  try { storage?.setItem(MODE_KEY, mode); } catch { /* not saved, fine */ }
+  render();
+}
+
+function setDrag(dx) {
+  const w = el.card.offsetWidth || 1;
+  el.card.style.transform = dx ? `translateX(${dx}px) rotate(${dx / 18}deg)` : '';
+  el.card.style.setProperty('--yes', String(Math.max(0, Math.min(1, dx / (w * 0.35)))));
+  el.card.style.setProperty('--no', String(Math.max(0, Math.min(1, -dx / (w * 0.35)))));
+}
+
+// Fly the card off to one side, then act on it and deal the next one.
+function decide(accept) {
+  if (flying || !cardId) return;
+  const id = cardId;
+  const picked = state.wheel.find((p) => p.id === id);
+  if (!picked) return;
+  const hadFocus = el.deck.contains(document.activeElement);
+  flying = true;
+  setDrag(accept ? 1 : -1); // shows the stamp even from a button press
+  el.card.style.setProperty(accept ? '--yes' : '--no', '1');
+  el.card.classList.remove('settle', 'enter');
+  el.card.classList.add('fly');
+  el.card.style.transform = `translateX(${accept ? 140 : -140}%) rotate(${accept ? 18 : -18}deg)`;
+
+  setTimeout(() => {
+    flying = false;
+    el.card.classList.remove('fly');
+    setDrag(0);
+    if (accept) {
+      ({ id: cardId, deck } = drawCard(deck, state.wheel.filter((p) => p.id !== id), rand, id));
+      arrivingId = id;
+      commit(confirmPick(state, id, Date.now()), `${picked.name} moved to working on and done.`);
+      arrivingId = null;
+    } else {
+      ({ id: cardId, deck } = drawCard(deck, state.wheel, rand, id));
+      render();
+      const next = state.wheel.find((p) => p.id === cardId);
+      el.announce.textContent = next && next.id !== id ? `Skipped. Next: ${next.name}.` : 'Skipped.';
+    }
+    if (cardId) dealAnimation();
+    if (hadFocus) (cardId ? el.card : el.input).focus();
+  }, reducedMotion.matches ? 0 : FLY_MS);
+}
+
+let drag = null;
+
+el.card.addEventListener('pointerdown', (e) => {
+  if (flying || e.button !== 0) return;
+  drag = { x: e.clientX, y: e.clientY, t: performance.now(), dx: 0, id: e.pointerId };
+  el.card.setPointerCapture(e.pointerId);
+  el.card.classList.remove('settle', 'enter');
+  el.card.classList.add('dragging');
+});
+
+el.card.addEventListener('pointermove', (e) => {
+  if (!drag || e.pointerId !== drag.id) return;
+  drag.dx = e.clientX - drag.x;
+  setDrag(drag.dx);
+});
+
+function endDrag(e, cancelled) {
+  if (!drag || e.pointerId !== drag.id) return;
+  const { dx, t } = drag;
+  drag = null;
+  el.card.classList.remove('dragging');
+  const speed = Math.abs(dx) / Math.max(1, performance.now() - t);
+  const far = Math.abs(dx) > el.card.offsetWidth * 0.35;
+  const flick = Math.abs(dx) > 40 && speed > 0.6;
+  if (!cancelled && (far || flick)) {
+    decide(dx > 0);
+  } else {
+    el.card.classList.add('settle');
+    setDrag(0);
+  }
+}
+
+el.card.addEventListener('pointerup', (e) => endDrag(e, false));
+el.card.addEventListener('pointercancel', (e) => endDrag(e, true));
+el.card.addEventListener('transitionend', () => el.card.classList.remove('settle'));
+
+el.card.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowRight') { e.preventDefault(); decide(true); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); decide(false); }
+});
+
+el.deckYes.addEventListener('click', () => decide(true));
+el.deckNo.addEventListener('click', () => decide(false));
+el.modeSpin.addEventListener('click', () => setMode('spin'));
+el.modeSwipe.addEventListener('click', () => setMode('swipe'));
 
 // ---------- Canvas ----------
 
