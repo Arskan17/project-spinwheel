@@ -139,11 +139,17 @@ export function fromSyncItems(all) {
   return pickState({ wheel: ordered(wheel), pile: ordered(pile) });
 }
 
+// Compare entry fields, not JSON text: chrome.storage doesn't keep key order,
+// so a ticket written as { n, o, d, t } may read back as { d, n, o, t }.
+const SYNC_FIELDS = ['n', 'o', 'd', 't'];
+const sameEntry = (a, b) => isObj(a) && isObj(b)
+  && SYNC_FIELDS.every((f) => (f in a) === (f in b) && a[f] === b[f]);
+
 // What to write to get from one set of entries to the next.
 export function syncChanges(prev, next) {
   const set = {};
   for (const [key, value] of Object.entries(next)) {
-    if (JSON.stringify(prev[key]) !== JSON.stringify(value)) set[key] = value;
+    if (!sameEntry(prev[key], value)) set[key] = value;
   }
   const remove = Object.keys(prev).filter((key) => !(key in next));
   return { set, remove };

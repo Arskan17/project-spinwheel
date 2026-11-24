@@ -409,6 +409,25 @@ test('syncChanges writes only what changed and removes what is gone', () => {
   assertEqual(Object.keys(removed.set).sort(), [L.SYNC_PREFIX + b, L.SYNC_PREFIX + c].sort(), 'positions shift');
 });
 
+test('syncChanges ignores key order, as chrome.storage reads it back', () => {
+  let s = withProjects('A', 'B');
+  const [a, b] = s.wheel.map((p) => p.id);
+  s = L.toggleDone(L.confirmPick(s, a, 1000), a);
+  const next = L.toSyncItems(s);
+  const reordered = Object.fromEntries(Object.entries(next).map(([k, v]) => [
+    k, Object.fromEntries(Object.entries(v).sort(([x], [y]) => (x < y ? -1 : 1))),
+  ]));
+  assertEqual(Object.keys(reordered[L.SYNC_PREFIX + a]), ['d', 'n', 'o', 't'], 'ticket keys sorted');
+  assertEqual(L.syncChanges(reordered, next), { set: {}, remove: [] });
+  // A real change to a reordered entry still counts.
+  const undone = L.toSyncItems(L.toggleDone(s, a));
+  assertEqual(Object.keys(L.syncChanges(reordered, undone).set), [L.SYNC_PREFIX + a]);
+  // A wheel entry turning into a ticket counts even though n and o match.
+  const wheelOnly = { [L.SYNC_PREFIX + b]: { n: 'B', o: 0 } };
+  const asTicket = { [L.SYNC_PREFIX + b]: { o: 0, n: 'B', d: false, t: 5 } };
+  assertEqual(Object.keys(L.syncChanges(wheelOnly, asTicket).set), [L.SYNC_PREFIX + b]);
+});
+
 test('sync entries stay inside chrome.storage.sync limits', () => {
   // 8 KB per entry, 100 KB total, 512 entries.
   const long = 'W'.repeat(L.MAX_NAME_LENGTH);
