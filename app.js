@@ -47,7 +47,10 @@ const SYNC_MIGRATED_KEY = 'spinwheel:sync-migrated';
 const NOTE_LOCAL = 'Saved in this browser.';
 const NOTE_SYNC = 'Saved in Chrome, and synced if you’re signed in with sync on.';
 let synced = {};          // the project entries chrome.storage.sync holds
-let syncWrites = 0;       // bumps on every write, so stale reads get dropped
+let syncWrites = 0;       // bumps when a write starts, so reads that overlap one get dropped
+let syncPending = 0;      // writes still in flight (set and remove both count)
+let refreshDue = false;   // a refresh was held back by a write; run it when writes settle
+let refreshDueForce = false;
 let remoteWaiting = false; // a change from elsewhere arrived mid-spin
 
 let state = sync ? await startSync() : loadState(storage);
@@ -132,23 +135,39 @@ async function writeSync(next) {
   const { set, remove } = syncChanges(synced, items);
   synced = items;
   syncWrites++;
+  syncPending++;
   try {
     // New entries first, so a failed write never leaves projects missing.
+    // The change event from set fires before remove runs; refreshFromSync
+    // waits for the whole write instead of reading that halfway state.
     if (Object.keys(set).length) await sync.set(set);
     if (remove.length) await sync.remove(remove);
     return null;
   } catch {
     return 'Not saved: Chrome sync refused the change (too much data, or too many changes a minute). Try again shortly.';
+  } finally {
+    syncPending--;
+    if (!syncPending && refreshDue) {
+      const force = refreshDueForce;
+      refreshDue = refreshDueForce = false;
+      refreshFromSync(force);
+    }
   }
 }
 
 // Reload after another device, tab or the side panel changed something.
 // `force` also redraws when the entries look unchanged, after a failed save.
 async function refreshFromSync(force = false) {
+  const holdBack = () => {
+    refreshDue = true;
+    refreshDueForce ||= force;
+  };
+  if (syncPending) return holdBack();
   const seen = syncWrites;
   let all;
   try { all = await sync.get(null); } catch { return; }
-  if (seen !== syncWrites) return; // a newer write of ours is pending; its change event reloads
+  // A write started while reading: this read may be stale or halfway.
+  if (seen !== syncWrites || syncPending) return holdBack();
   const items = syncItemsOnly(all);
   const { set, remove } = syncChanges(synced, items);
   if (!force && !Object.keys(set).length && !remove.length) return;
