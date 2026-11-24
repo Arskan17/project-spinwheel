@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "Project spinwheel",
+  "description": "Spin a wheel of your projects to pick what to work on next.",
+  "version": "1.0.0",
+  "minimum_chrome_version": "116",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "action": {
+    "default_title": "Open Project spinwheel",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    }
+  },
+  "side_panel": {
+    "default_path": "index.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": ["sidePanel"]
+}
