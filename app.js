@@ -1,6 +1,7 @@
 import {
   addProject, removeProject, confirmPick, toggleDone, returnToWheel,
   loadState, saveState, STORAGE_KEY,
+  SYNC_PREFIX, SYNC_MAX_PROJECTS, toSyncItems, syncItemsOnly, fromSyncItems, syncChanges,
   exportState, exportFileName, parseBackup, mergeBackup, parseNameList, addNames,
   drawCard,
   pickIndex, targetRotation, indexAtPointer, sliceColors, easeOutCubic,
@@ -39,7 +40,17 @@ const storage = (() => { try { return window.localStorage; } catch { return null
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 const dateFmt = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' });
 
-let state = loadState(storage);
+// In the Chrome extension, projects live in chrome.storage.sync so they follow
+// you to every Chrome you're signed into. The website keeps localStorage.
+let sync = globalThis.chrome?.storage?.sync ?? null;
+const SYNC_MIGRATED_KEY = 'spinwheel:sync-migrated';
+const NOTE_LOCAL = 'Saved in this browser.';
+const NOTE_SYNC = 'Saved in Chrome, and synced if you’re signed in with sync on.';
+let synced = {};          // the project entries chrome.storage.sync holds
+let syncWrites = 0;       // bumps on every write, so stale reads get dropped
+let remoteWaiting = false; // a change from elsewhere arrived mid-spin
+
+let state = sync ? await startSync() : loadState(storage);
 let rotation = 0;
 let spinning = false;
 let arrivingId = null;
@@ -59,13 +70,95 @@ function rand() {
 
 function commit(next, message) {
   state = next;
-  const saved = saveState(storage, state);
-  el.saveNote.textContent = saved
-    ? 'Saved in this browser.'
-    : 'This browser blocks saving, so changes last only until you close the tab.';
-  el.saveNote.classList.toggle('warn', !saved);
+  if (sync) {
+    writeSync(state).then((error) => {
+      setSaveNote(error ?? NOTE_SYNC, Boolean(error));
+      if (error) refreshFromSync(true); // show what is actually saved
+    });
+  } else {
+    const saved = saveState(storage, state);
+    setSaveNote(saved
+      ? NOTE_LOCAL
+      : 'This browser blocks saving, so changes last only until you close the tab.', !saved);
+  }
   render();
   if (message) el.announce.textContent = message;
+}
+
+function setSaveNote(text, warn) {
+  el.saveNote.textContent = text;
+  el.saveNote.classList.toggle('warn', warn);
+}
+
+// ---------- Chrome sync ----------
+
+// Load from chrome.storage.sync before the first render. The first time, also
+// bring in what this extension saved in localStorage before sync existed.
+async function startSync() {
+  let current;
+  try {
+    synced = syncItemsOnly(await sync.get(null));
+    current = fromSyncItems(synced);
+  } catch {
+    sync = null;
+    return loadState(storage);
+  }
+  setSaveNote(NOTE_SYNC, false);
+  let migrated = true;
+  try { migrated = storage?.getItem(SYNC_MIGRATED_KEY) === '1' || !storage; } catch { /* treat as done */ }
+  if (!migrated) {
+    const local = loadState(storage);
+    if (local.wheel.length || local.pile.length) {
+      const merged = mergeBackup(current, local).state;
+      const error = await writeSync(merged);
+      if (error) {
+        setSaveNote(error, true);
+        try { synced = syncItemsOnly(await sync.get(null)); } catch { /* keep the old view */ }
+        return fromSyncItems(synced); // leave the flag off and try again next time
+      }
+      current = merged;
+    }
+    try { storage.setItem(SYNC_MIGRATED_KEY, '1'); } catch { /* retried next time, merge skips duplicates */ }
+  }
+  return current;
+}
+
+// Write only the entries that changed. Resolves to an error message or null.
+async function writeSync(next) {
+  if (next.wheel.length + next.pile.length > SYNC_MAX_PROJECTS) {
+    return `Not saved: Chrome sync holds up to ${SYNC_MAX_PROJECTS} projects. Remove some, or export a backup.`;
+  }
+  const items = toSyncItems(next);
+  const { set, remove } = syncChanges(synced, items);
+  synced = items;
+  syncWrites++;
+  try {
+    // New entries first, so a failed write never leaves projects missing.
+    if (Object.keys(set).length) await sync.set(set);
+    if (remove.length) await sync.remove(remove);
+    return null;
+  } catch {
+    return 'Not saved: Chrome sync refused the change (too much data, or too many changes a minute). Try again shortly.';
+  }
+}
+
+// Reload after another device, tab or the side panel changed something.
+// `force` also redraws when the entries look unchanged, after a failed save.
+async function refreshFromSync(force = false) {
+  const seen = syncWrites;
+  let all;
+  try { all = await sync.get(null); } catch { return; }
+  if (seen !== syncWrites) return; // a newer write of ours is pending; its change event reloads
+  const items = syncItemsOnly(all);
+  const { set, remove } = syncChanges(synced, items);
+  if (!force && !Object.keys(set).length && !remove.length) return;
+  synced = items;
+  if (spinning) {
+    remoteWaiting = true;
+    return;
+  }
+  state = fromSyncItems(items);
+  render();
 }
 
 // ---------- Rendering ----------
@@ -446,6 +539,10 @@ function spin() {
 function finishSpin(pickedId, to) {
   rotation = to % TAU;
   spinning = false;
+  if (remoteWaiting) {
+    remoteWaiting = false;
+    state = fromSyncItems(synced);
+  }
   el.side.inert = false;
   render();
   const picked = state.wheel.find((p) => p.id === pickedId);
@@ -636,9 +733,18 @@ if (location.protocol === 'chrome-extension:'
   $('open-tab').hidden = false;
 }
 
-// Keep two open tabs (or the side panel and a tab) in step.
+// Keep the side panel, tabs and other computers in step.
+if (sync) {
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'sync' && Object.keys(changes).some((k) => k.startsWith(SYNC_PREFIX))) {
+      refreshFromSync();
+    }
+  });
+}
+
+// On the website, keep two open tabs in step.
 window.addEventListener('storage', (e) => {
-  if (e.key !== STORAGE_KEY || spinning) return;
+  if (sync || e.key !== STORAGE_KEY || spinning) return;
   state = loadState(storage);
   render();
 });
