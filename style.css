@@ -97,6 +97,16 @@ button { cursor: pointer; }
   max-width: 36ch;
 }
 
+.open-tab {
+  display: inline-block;
+  margin-top: 0.75rem;
+  color: var(--bulb);
+  font-weight: 600;
+  text-underline-offset: 0.2em;
+}
+
+.open-tab[hidden] { display: none; }
+
 /* ---------- Layout ---------- */
 
 .booth {
