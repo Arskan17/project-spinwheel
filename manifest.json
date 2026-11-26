@@ -2,8 +2,9 @@
   "manifest_version": 3,
   "name": "Project spinwheel",
   "description": "Spin a wheel of your projects to pick what to work on next.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "minimum_chrome_version": "116",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA280pfr4KH80ny601tG0z/lY+aKWfOZ6st8+bRsKd/eOAW0Vtt+/pzr8Fyk/a4mknAlPHdpnW1qFK/n5eAl0i9SiI8O7r1d+OeXLoZWoN79cTB5yBG62cbEReE4Lf6rpXWAR4qox3ag6Po5E3y93vmc/7yMVvt0eo5hxp56tKlBHMdJb/Q/upmUU9/2RmtphvQn/692q1iJ2d/Lcm/JkY+uv21NZ6qNQ1xS8Ydn51Op4W1k+JoBfSsRi2ldMaMQ9wIaakuMZii4ic427ox3t5g1odSlqE7nmc22Ude/0W+c8rC09t3Ztwi9+bqs/jURxdTDRZkRUGvyaMAgc1/xt1WwIDAQAB",
   "icons": {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",
@@ -23,5 +24,8 @@
   "background": {
     "service_worker": "background.js"
   },
-  "permissions": ["sidePanel"]
+  "permissions": [
+    "sidePanel",
+    "storage"
+  ]
 }

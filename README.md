@@ -62,9 +62,29 @@ The panel and the tab share the same data and stay in step.
 After pulling changes, click the reload arrow on the extension's card in
 `chrome://extensions`.
 
-The extension keeps its own data, separate from the website. To bring your
-projects over, use **Export** on the website and **Import…** in the extension.
-Removing the extension deletes its data, so export first.
+### Sync between computers
+
+In the extension your projects are saved with Chrome sync, so they follow
+you to every Chrome where you're signed in. There's nothing to log into in
+the extension itself:
+
+1. Sign into Chrome and turn sync on.
+2. Under **Settings → You and Google → Sync and Google services → Manage what
+   you sync**, keep **Extensions** ticked.
+3. Load the extension unpacked on each computer, as above. Chrome doesn't
+   install unpacked extensions on your other computers for you, but once it's
+   loaded, the data comes across.
+
+The manifest pins the extension's ID, so every copy you load counts as the
+same extension and shares the same data. Not signed in? Everything still
+saves on that computer.
+
+Chrome sync only works between Chrome browsers. Brave, Edge and other
+Chromium browsers have their own sync, if any, and the side panel may not
+work there. See [docs/faq.md](docs/faq.md) for this and other questions.
+
+The extension's data is separate from the website's. To bring your projects
+over, use **Export** on the website and **Import…** in the extension.
 
 ## Use it on GitHub Pages
 
@@ -115,3 +135,4 @@ The logic in `logic.js` (list changes, storage, spin maths, swipe deck) has test
 | `background.js` | Extension service worker: the toolbar icon opens the side panel |
 | `icons/` | Wheel icon as SVG, plus the PNG sizes the extension needs |
 | `fonts/` | Bundled Bricolage Grotesque and its license (`OFL.txt`) |
+| `docs/faq.md` | Questions about the extension, sync and other browsers |

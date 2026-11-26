@@ -358,6 +358,94 @@ test('drawCard skips removed projects and handles an empty or single wheel', () 
   assertEqual(L.drawCard([], one.wheel, Math.random, solo).id, solo, 'only card comes back');
 });
 
+// ---- chrome sync entries ----
+
+test('toSyncItems and fromSyncItems round-trip wheel, tickets and order', () => {
+  let s = withProjects('A', 'B', 'C', 'D');
+  const [a, , c] = s.wheel.map((p) => p.id);
+  s = L.confirmPick(s, a, 1000);
+  s = L.confirmPick(s, c, 2000);
+  s = L.toggleDone(s, a);
+  const items = L.toSyncItems(s);
+  assertEqual(Object.keys(items).length, 4);
+  assert(Object.keys(items).every((k) => k.startsWith(L.SYNC_PREFIX)), 'prefixed keys');
+  assertEqual(L.fromSyncItems(items), s);
+});
+
+test('fromSyncItems ignores other keys and bad entries', () => {
+  const s = withProjects('A', 'B');
+  const all = {
+    ...L.toSyncItems(s),
+    'something-else': { n: 'Nope', o: 0 },
+    [L.SYNC_PREFIX]: { n: 'No id', o: 0 },
+    [L.SYNC_PREFIX + 'x1']: 'not an object',
+    [L.SYNC_PREFIX + 'x2']: { n: '   ', o: 0 },
+    [L.SYNC_PREFIX + 'x3']: { n: 'Bad date', o: 0, d: false, t: 'yesterday' },
+  };
+  assertEqual(L.fromSyncItems(all), s);
+  assertEqual(L.fromSyncItems(undefined), L.emptyState());
+  assertEqual(L.fromSyncItems({}), L.emptyState());
+});
+
+test('fromSyncItems breaks position ties by id, the same on every computer', () => {
+  const all = {
+    [L.SYNC_PREFIX + 'b']: { n: 'B', o: 1 },
+    [L.SYNC_PREFIX + 'a']: { n: 'A', o: 1 },
+    [L.SYNC_PREFIX + 'z']: { n: 'Z', o: 0 },
+    [L.SYNC_PREFIX + 'm']: { n: 'No position' },
+  };
+  assertEqual(L.fromSyncItems(all).wheel.map((p) => p.name), ['Z', 'A', 'B', 'No position']);
+});
+
+test('syncChanges writes only what changed and removes what is gone', () => {
+  const s = withProjects('A', 'B', 'C');
+  const [a, b, c] = s.wheel.map((p) => p.id);
+  const before = L.toSyncItems(s);
+  assertEqual(L.syncChanges(before, before), { set: {}, remove: [] });
+  const picked = L.toSyncItems(L.confirmPick(s, c, 5));
+  assertEqual(Object.keys(L.syncChanges(before, picked).set), [L.SYNC_PREFIX + c]);
+  const removed = L.syncChanges(before, L.toSyncItems(L.removeProject(s, a)));
+  assertEqual(removed.remove, [L.SYNC_PREFIX + a]);
+  assertEqual(Object.keys(removed.set).sort(), [L.SYNC_PREFIX + b, L.SYNC_PREFIX + c].sort(), 'positions shift');
+});
+
+test('syncChanges ignores key order, as chrome.storage reads it back', () => {
+  let s = withProjects('A', 'B');
+  const [a, b] = s.wheel.map((p) => p.id);
+  s = L.toggleDone(L.confirmPick(s, a, 1000), a);
+  const next = L.toSyncItems(s);
+  const reordered = Object.fromEntries(Object.entries(next).map(([k, v]) => [
+    k, Object.fromEntries(Object.entries(v).sort(([x], [y]) => (x < y ? -1 : 1))),
+  ]));
+  assertEqual(Object.keys(reordered[L.SYNC_PREFIX + a]), ['d', 'n', 'o', 't'], 'ticket keys sorted');
+  assertEqual(L.syncChanges(reordered, next), { set: {}, remove: [] });
+  // A real change to a reordered entry still counts.
+  const undone = L.toSyncItems(L.toggleDone(s, a));
+  assertEqual(Object.keys(L.syncChanges(reordered, undone).set), [L.SYNC_PREFIX + a]);
+  // A wheel entry turning into a ticket counts even though n and o match.
+  const wheelOnly = { [L.SYNC_PREFIX + b]: { n: 'B', o: 0 } };
+  const asTicket = { [L.SYNC_PREFIX + b]: { o: 0, n: 'B', d: false, t: 5 } };
+  assertEqual(Object.keys(L.syncChanges(wheelOnly, asTicket).set), [L.SYNC_PREFIX + b]);
+});
+
+test('sync entries stay inside chrome.storage.sync limits', () => {
+  // 8 KB per entry, 100 KB total, 512 entries.
+  const long = 'W'.repeat(L.MAX_NAME_LENGTH);
+  const wheel = [];
+  const pile = [];
+  for (let i = 0; i < L.SYNC_MAX_PROJECTS; i++) {
+    const id = crypto.randomUUID();
+    if (i % 2) wheel.push({ id, name: long });
+    else pile.push({ id, name: long, done: true, pickedAt: 8.64e15 });
+  }
+  const items = L.toSyncItems({ wheel, pile });
+  const sizes = Object.entries(items).map(([k, v]) => k.length + JSON.stringify(v).length);
+  assert(L.SYNC_MAX_PROJECTS < 512, 'room under the entry cap');
+  assert(Math.max(...sizes) < 8192, `largest entry ${Math.max(...sizes)} bytes`);
+  const total = sizes.reduce((x, y) => x + y, 0);
+  assert(total < 102400, `total ${total} bytes`);
+});
+
 // ---- report ----
 const failed = results.filter((r) => !r.ok);
 const summary = `${failed.length ? 'FAIL' : 'PASS'} ${failed.length ? failed.length : results.length}`;

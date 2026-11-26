@@ -93,6 +93,68 @@ export function saveState(storage, state) {
   }
 }
 
+// ---- Chrome sync (extension only) ----
+// chrome.storage.sync allows 8 KB per entry and 512 entries, so the state is
+// stored as one small entry per project, not one big value. Edits to
+// different projects on two computers then merge instead of overwriting.
+// Entry: key SYNC_PREFIX + id, value { n: name, o: position } on the wheel,
+// plus d (done) and t (pickedAt) for tickets.
+
+export const SYNC_PREFIX = 'spinwheel:p:';
+export const SYNC_MAX_PROJECTS = 500;
+
+export function toSyncItems(state) {
+  const items = {};
+  state.wheel.forEach((p, o) => { items[SYNC_PREFIX + p.id] = { n: p.name, o }; });
+  state.pile.forEach((p, o) => {
+    items[SYNC_PREFIX + p.id] = { n: p.name, o, d: p.done, t: p.pickedAt };
+  });
+  return items;
+}
+
+// Only the project entries from everything chrome.storage.sync returned.
+export function syncItemsOnly(all) {
+  const items = {};
+  if (!isObj(all)) return items;
+  for (const [key, value] of Object.entries(all)) {
+    if (key.startsWith(SYNC_PREFIX) && key.length > SYNC_PREFIX.length) items[key] = value;
+  }
+  return items;
+}
+
+export function fromSyncItems(all) {
+  const wheel = [];
+  const pile = [];
+  for (const [key, v] of Object.entries(syncItemsOnly(all))) {
+    if (!isObj(v)) continue;
+    const id = key.slice(SYNC_PREFIX.length);
+    const o = Number.isFinite(v.o) ? v.o : Number.MAX_SAFE_INTEGER;
+    if ('t' in v) pile.push({ o, id, item: { id, name: v.n, done: v.d, pickedAt: v.t } });
+    else wheel.push({ o, id, item: { id, name: v.n } });
+  }
+  // Ties (two computers appending at once) break by id, the same everywhere.
+  const ordered = (xs) => xs
+    .sort((a, b) => a.o - b.o || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    .map((x) => x.item);
+  return pickState({ wheel: ordered(wheel), pile: ordered(pile) });
+}
+
+// Compare entry fields, not JSON text: chrome.storage doesn't keep key order,
+// so a ticket written as { n, o, d, t } may read back as { d, n, o, t }.
+const SYNC_FIELDS = ['n', 'o', 'd', 't'];
+const sameEntry = (a, b) => isObj(a) && isObj(b)
+  && SYNC_FIELDS.every((f) => (f in a) === (f in b) && a[f] === b[f]);
+
+// What to write to get from one set of entries to the next.
+export function syncChanges(prev, next) {
+  const set = {};
+  for (const [key, value] of Object.entries(next)) {
+    if (!sameEntry(prev[key], value)) set[key] = value;
+  }
+  const remove = Object.keys(prev).filter((key) => !(key in next));
+  return { set, remove };
+}
+
 // ---- Import and export ----
 // A backup is the saved state plus a small header, as pretty-printed JSON.
 // A name list is plain text, one project per line; for CSV the first column.
