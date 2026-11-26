@@ -43,6 +43,29 @@ Under **Backup & import**:
       quoted values all work, and a header row named `Name`, `Project` or
       `Projekt` is skipped.
 
+## Use it as a Chrome extension
+
+The same files are also a Chrome extension (Chrome 116 or newer) that opens
+in the side panel, so the wheel can stay next to whatever you're working on.
+
+1. Get the repo onto the computer where Chrome runs (clone it or download the
+   ZIP and unpack it).
+2. Open `chrome://extensions` and switch on **Developer mode** (top right).
+3. Click **Load unpacked** and pick the repo folder (the one with
+   `manifest.json`).
+4. Pin **Project spinwheel** from the puzzle-piece menu. Clicking its icon
+   opens the side panel.
+
+**Open in full tab** at the top of the panel opens the big wheel in a tab.
+The panel and the tab share the same data and stay in step.
+
+After pulling changes, click the reload arrow on the extension's card in
+`chrome://extensions`.
+
+The extension keeps its own data, separate from the website. To bring your
+projects over, use **Export** on the website and **Import…** in the extension.
+Removing the extension deletes its data, so export first.
+
 ## Use it on GitHub Pages
 
 No build step. The site is the files at the repo root.
@@ -88,3 +111,7 @@ The logic in `logic.js` (list changes, storage, spin maths, swipe deck) has test
 | `app.js` | Wheel drawing, spin animation, swipe deck, buttons, saving, export and import |
 | `logic.js` | Pure state, spin maths, swipe-deck shuffling and backup/name-list parsing, no DOM |
 | `tests.js`, `tests.html` | Tests for `logic.js` |
+| `manifest.json` | Chrome extension manifest (side panel) |
+| `background.js` | Extension service worker: the toolbar icon opens the side panel |
+| `icons/` | Wheel icon as SVG, plus the PNG sizes the extension needs |
+| `fonts/` | Bundled Bricolage Grotesque and its license (`OFL.txt`) |

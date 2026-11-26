@@ -629,7 +629,14 @@ function importNames(text, csv) {
   setStatus(`Added ${plural(added, 'project')} to the wheel.${skipped ? ` Skipped ${skipped} already on it.` : ''}`);
 }
 
-// Keep two open tabs in step.
+// In the Chrome extension the page runs in the side panel; offer the big
+// wheel in a tab. Tabs opened from here carry ?view=tab and skip the link.
+if (location.protocol === 'chrome-extension:'
+    && new URLSearchParams(location.search).get('view') !== 'tab') {
+  $('open-tab').hidden = false;
+}
+
+// Keep two open tabs (or the side panel and a tab) in step.
 window.addEventListener('storage', (e) => {
   if (e.key !== STORAGE_KEY || spinning) return;
   state = loadState(storage);
