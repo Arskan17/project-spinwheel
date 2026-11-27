@@ -115,3 +115,5 @@ The logic in `logic.js` (list changes, storage, spin maths, swipe deck) has test
 | `background.js` | Extension service worker: the toolbar icon opens the side panel |
 | `icons/` | Wheel icon as SVG, plus the PNG sizes the extension needs |
 | `fonts/` | Bundled Bricolage Grotesque and its license (`OFL.txt`) |
+| `knowledge/` | Notes for developers and AI sessions: architecture, decisions, workflows, history ([OKF v0.2](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf)). Start at `knowledge/index.md` |
+| `CLAUDE.md` | Tells Claude Code sessions to read and update `knowledge/` |
