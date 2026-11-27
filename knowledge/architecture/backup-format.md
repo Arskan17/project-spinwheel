@@ -3,7 +3,7 @@ type: Data Format
 title: Backup format and import rules
 description: The JSON backup files (v1 single wheel, v2 sections), name-list imports, and what Merge and Replace do.
 tags: [architecture, import, export, backup]
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-27T12:35:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-27T14:25:00Z }
 sources:
   - { id: logic, resource: ../../logic.js, title: logic.js }
   - { id: readme, resource: ../../README.md, title: README }
@@ -34,7 +34,9 @@ of `sections`. A raw localStorage value also parses as a backup.
 - `{ kind: 'single', state }` for a v1 backup (has `wheel` or `pile`),
 - `null` otherwise ("That file isn't a spinwheel backup").
 
-A BOM is stripped. Bad items are dropped, names cleaned, ids and wheel names deduped.
+A BOM is stripped. Bad items are dropped, names cleaned, section ids and names
+made unique, and item ids and wheel names deduped **within each section** (the
+same item id may appear in two sections).
 Files over 1 MB are refused before reading.
 
 # What import does

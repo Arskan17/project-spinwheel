@@ -3,7 +3,7 @@ type: Reference
 title: Storage
 description: localStorage keys the app uses, how old saves migrate, and how two open windows stay in step.
 tags: [architecture, storage, migration]
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-27T12:35:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-27T14:25:00Z }
 sources:
   - { id: logic, resource: ../../logic.js, title: logic.js }
   - { id: app, resource: ../../app.js, title: app.js }
@@ -21,7 +21,8 @@ sources:
 
 `loadWorkspace(storage)`:[^logic]
 
-1. Parse `spinwheel:v2` and clean it (bad sections dropped, ids deduped,
+1. Parse `spinwheel:v2` and clean it (bad sections dropped, section ids deduped,
+   item ids deduped within each section only,
    unknown `activeId` → first section). Use it if at least one section survives.
 2. Otherwise read `spinwheel:v1` with `loadState`; if it has anything, it
    becomes the only section, "My projects".
