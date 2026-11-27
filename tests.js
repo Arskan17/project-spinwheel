@@ -358,6 +358,129 @@ test('drawCard skips removed projects and handles an empty or single wheel', () 
   assertEqual(L.drawCard([], one.wheel, Math.random, solo).id, solo, 'only card comes back');
 });
 
+// ---- Sections ----
+
+const sectionNames = (ws) => ws.sections.map((s) => s.name);
+const wsWith = (...ns) => ns.reduce((ws, n) => L.addSection(ws, n).ws, L.emptyWorkspace());
+
+test('emptyWorkspace has one active, empty section', () => {
+  const ws = L.emptyWorkspace();
+  assertEqual(sectionNames(ws), ['My projects']);
+  assertEqual(L.activeSection(ws).id, ws.activeId);
+  assert(L.isBlankWorkspace(ws), 'blank');
+});
+
+test('addSection adds, switches to it, and rejects empty or duplicate names', () => {
+  const ws = wsWith('  Work ');
+  assertEqual(sectionNames(ws), ['My projects', 'Work']);
+  assertEqual(L.activeSection(ws).name, 'Work');
+  assertEqual(L.addSection(ws, '  ').error, 'empty');
+  assertEqual(L.addSection(ws, 'WORK').error, 'duplicate');
+});
+
+test('renameSection keeps its own name allowed, rejects others', () => {
+  const ws = wsWith('Work');
+  const work = ws.sections[1].id;
+  assertEqual(L.renameSection(ws, work, 'work').error, null, 'own name, new case');
+  assertEqual(L.renameSection(ws, work, 'my PROJECTS').error, 'duplicate');
+  assertEqual(sectionNames(L.renameSection(ws, work, 'Job').ws), ['My projects', 'Job']);
+});
+
+test('removeSection picks a neighbour and keeps the last one', () => {
+  const ws = wsWith('B', 'C');
+  const [a, b, c] = ws.sections.map((s) => s.id);
+  assertEqual(L.removeSection(L.selectSection(ws, b), b).activeId, c, 'next');
+  assertEqual(L.removeSection(ws, c).activeId, b, 'previous at the end');
+  assertEqual(L.removeSection(ws, a).activeId, c, 'inactive removed, active stays');
+  const one = L.emptyWorkspace();
+  assertEqual(L.removeSection(one, one.activeId), one, 'last stays');
+});
+
+test('updateSection changes only that section', () => {
+  const ws = wsWith('Work');
+  const [home, work] = ws.sections.map((s) => s.id);
+  const next = L.updateSection(ws, work, withProjects('Report'));
+  assertEqual(names(next.sections[1].wheel), ['Report']);
+  assertEqual(next.sections[0].wheel, [], 'other untouched');
+  assertEqual(next.sections[0].id, home);
+  assertEqual(ws.sections[1].wheel, [], 'no mutation');
+});
+
+test('loadWorkspace moves an older save into the first section', () => {
+  const old = sample();
+  const ws = L.loadWorkspace(fakeStorage({ 'spinwheel:v1': JSON.stringify(old) }));
+  assertEqual(sectionNames(ws), ['My projects']);
+  assertEqual(L.activeSection(ws).wheel, old.wheel);
+  assertEqual(L.activeSection(ws).pile, old.pile);
+});
+
+test('loadWorkspace round-trips saveWorkspace and survives garbage', () => {
+  const store = fakeStorage();
+  let ws = wsWith('Work');
+  ws = L.updateSection(ws, ws.activeId, sample());
+  assert(L.saveWorkspace(store, ws), 'saved');
+  assertEqual(L.loadWorkspace(store), ws);
+  for (const raw of ['nope', '{}', '{"sections":[]}', '{"sections":[{"id":"x","name":" "}]}']) {
+    assert(L.isBlankWorkspace(L.loadWorkspace(fakeStorage({ 'spinwheel:v2': raw }))), raw);
+  }
+});
+
+test('exportWorkspace round-trips through parseAnyBackup', () => {
+  let ws = wsWith('Work');
+  ws = L.updateSection(ws, ws.activeId, sample());
+  const text = L.exportWorkspace(ws, Date.UTC(2026, 10, 27, 9));
+  const data = JSON.parse(text);
+  assertEqual([data.app, data.version], ['project-spinwheel', 2]);
+  assertEqual(L.parseAnyBackup(text), { kind: 'sections', ws });
+});
+
+test('parseAnyBackup reads older backups as a single section', () => {
+  const s = sample();
+  assertEqual(L.parseAnyBackup(L.exportState(s, 0)), { kind: 'single', state: s });
+  for (const raw of ['', 'x', '{}', '{"sections":[]}', '{"sections":5}']) {
+    assertEqual(L.parseAnyBackup(raw), null, raw);
+  }
+});
+
+test('parseAnyBackup cleans sections', () => {
+  const r = L.parseAnyBackup(JSON.stringify({
+    activeId: 'gone',
+    sections: [
+      { id: 's1', name: ' Work ', wheel: [{ id: 'a', name: 'A' }] },
+      { id: 's1', name: 'Same id' },
+      { id: 's2', name: 'work', wheel: [{ id: 'a', name: 'Same item id' }, { id: 'b', name: 'B' }] },
+      { id: 's3', name: '' },
+      { name: 'No id' },
+      'junk',
+    ],
+  }));
+  assertEqual(sectionNames(r.ws), ['Work', 'work 2']);
+  assertEqual(r.ws.activeId, 's1');
+  assertEqual(names(r.ws.sections[1].wheel), ['B'], 'item ids unique across sections');
+  assertEqual(r.ws.sections[1].pile, []);
+});
+
+test('mergeWorkspace joins by id or name and adds the rest', () => {
+  let ws = wsWith('Work');
+  const [home, work] = ws.sections.map((s) => s.id);
+  ws = L.updateSection(ws, work, withProjects('Report'));
+  ws = L.selectSection(ws, home);
+  const incoming = {
+    activeId: 'x',
+    sections: [
+      { id: home, name: 'Renamed home', wheel: [{ id: 'h1', name: 'Shed' }], pile: [] },
+      { id: 'other', name: 'WORK', wheel: [{ id: 'w1', name: 'report' }, { id: 'w2', name: 'Slides' }], pile: [] },
+      { id: 'new', name: 'Garden', wheel: [{ id: 'g1', name: 'Roses' }], pile: [] },
+    ],
+  };
+  const r = L.mergeWorkspace(ws, incoming);
+  assertEqual(sectionNames(r.ws), ['My projects', 'Work', 'Garden']);
+  assertEqual(names(r.ws.sections[0].wheel), ['Shed']);
+  assertEqual(names(r.ws.sections[1].wheel), ['Report', 'Slides']);
+  assertEqual([r.added, r.addedSections], [3, 1]);
+  assertEqual(r.ws.activeId, home, 'active unchanged');
+});
+
 // ---- report ----
 const failed = results.filter((r) => !r.ok);
 const summary = `${failed.length ? 'FAIL' : 'PASS'} ${failed.length ? failed.length : results.length}`;
