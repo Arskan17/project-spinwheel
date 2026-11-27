@@ -7,6 +7,22 @@ a ticket in **Working on & done**, where you can tick it off or put it back.
 Everything is saved in your browser (localStorage). It stays on that browser
 and device, and clearing the site's data wipes it.
 
+## Sections
+
+Keep separate wheels for separate parts of life: Work, Home, Side quests…
+Each section has its own wheel, its own swipe deck and its own **Working on &
+done** tickets.
+
+- The sections are listed on the left (on narrow screens and in the Chrome
+  side panel, as a row of pills above the wheel). Click one to jump to it.
+- **+ New section** creates one and switches to it.
+- **Rename** and **Delete** next to the section's title act on the section
+  you're in. Deleting takes its projects and tickets with it, and the last
+  section can't be deleted.
+
+If you used the app before sections existed, your projects and tickets are in
+a section called **My projects**.
+
 ## Spin or swipe
 
 The switch above the wheel picks how you choose:
@@ -25,19 +41,23 @@ The app remembers which mode you used last.
 
 Under **Backup & import**:
 
-- **Export** downloads `spinwheel-YYYY-MM-DD.json` with everything: the wheel,
-  the tickets, whether they're done and when they were picked. Use it as a
-  backup or to move to another browser or device.
-- **Import…** takes one of two kinds of file:
-  - **A backup (`.json`).** If the app is empty it loads straight away.
-    Otherwise it asks:
-    - **Merge** keeps what you have and adds what's new. It skips anything
-      that's already here (same project from an earlier export, or a name
-      already on the wheel).
-    - **Replace** swaps everything for what's in the file.
+- **Export** downloads `spinwheel-YYYY-MM-DD.json` with everything: every
+  section with its wheel and tickets, whether they're done and when they were
+  picked. Use it as a backup or to move to another browser or device.
+- **Import…** takes one of these kinds of file:
+  - **A backup (`.json`).** If the app is empty it loads straight away, with
+    all its sections. Otherwise it asks:
+    - **Merge** keeps what you have and adds what's new. A section in the file
+      joins your section with the same name (or the same section from an
+      earlier export); the others come in as new sections. Inside a section it
+      skips anything that's already there (same project from an earlier
+      export, or a name already on the wheel).
+    - **Replace** swaps all your sections for the ones in the file.
+  - **An older backup from before sections.** Merge and Replace then apply
+    only to the section you're in; the others stay as they are.
   - **A list of names (`.txt` or `.csv`).** Each line becomes a project on the
-    wheel, with the same rules as typing it in: trimmed, at most 60 characters,
-    no duplicates.
+    wheel of the section you're in, with the same rules as typing it in:
+    trimmed, at most 60 characters, no duplicates.
     - A `.txt` uses the whole line, commas included.
     - A `.csv` uses the first column. Comma, semicolon and tab delimiters and
       quoted values all work, and a header row named `Name`, `Project` or
@@ -86,7 +106,7 @@ python3 -m http.server 8000
 
 ## Tests
 
-The logic in `logic.js` (list changes, storage, spin maths, swipe deck) has tests in
+The logic in `logic.js` (list changes, sections, storage, spin maths, swipe deck) has tests in
 `tests.js`. Either:
 
 - open `http://localhost:8000/tests.html`, where the page title shows `PASS <n>`, or
@@ -108,8 +128,8 @@ The logic in `logic.js` (list changes, storage, spin maths, swipe deck) has test
 |---|---|
 | `index.html` | Page markup |
 | `style.css` | Look and layout |
-| `app.js` | Wheel drawing, spin animation, swipe deck, buttons, saving, export and import |
-| `logic.js` | Pure state, spin maths, swipe-deck shuffling and backup/name-list parsing, no DOM |
+| `app.js` | Sections, wheel drawing, spin animation, swipe deck, buttons, saving, export and import |
+| `logic.js` | Pure state and sections, spin maths, swipe-deck shuffling and backup/name-list parsing, no DOM |
 | `tests.js`, `tests.html` | Tests for `logic.js` |
 | `manifest.json` | Chrome extension manifest (side panel) |
 | `background.js` | Extension service worker: the toolbar icon opens the side panel |
