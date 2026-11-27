@@ -132,8 +132,7 @@ export function parseBackup(text) {
   return tidyState(pickState(data), new Set());
 }
 
-// Trim names, drop repeated ids (tracked in `ids`, which may be shared across
-// sections) and repeated wheel names.
+// Trim names, drop repeated ids (tracked in `ids`) and repeated wheel names.
 function tidyState(picked, ids) {
   const firstId = (p) => !ids.has(p.id) && ids.add(p.id);
   const tidy = (list) =>
@@ -289,14 +288,15 @@ function uniqueName(name, taken) {
   }
 }
 
-// Keep only well-formed sections. Names are cleaned and made unique, ids
-// (of sections and of items, across all sections) are kept unique, and a
+// Keep only well-formed sections. Names are cleaned and made unique, section
+// ids are kept unique, item ids are unique within each section (the same item
+// id may appear in several sections, e.g. after importing one backup twice;
+// every item operation works inside one section), and a
 // missing or unknown activeId falls back to the first section. Returns null
 // when there's no usable section.
 function pickWorkspace(data) {
   if (!isObj(data) || !Array.isArray(data.sections)) return null;
   const sectionIds = new Set();
-  const itemIds = new Set();
   const sections = [];
   for (const raw of data.sections) {
     if (!isObj(raw) || typeof raw.id !== 'string' || sectionIds.has(raw.id)) continue;
@@ -307,7 +307,7 @@ function pickWorkspace(data) {
     sections.push({
       id: raw.id,
       name: uniqueName(name, sections.map((s) => s.name)),
-      ...tidyState(picked, itemIds),
+      ...tidyState(picked, new Set()),
     });
   }
   if (!sections.length) return null;

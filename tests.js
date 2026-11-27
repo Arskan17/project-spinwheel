@@ -425,6 +425,20 @@ test('loadWorkspace round-trips saveWorkspace and survives garbage', () => {
   }
 });
 
+test('sections sharing item ids survive save and load', () => {
+  // Importing one pre-sections backup into two sections gives both the same ids.
+  const backup = sample();
+  let ws = wsWith('Work');
+  const [home, work] = ws.sections.map((s) => s.id);
+  ws = L.updateSection(ws, home, backup);
+  ws = L.updateSection(ws, work, L.mergeBackup(L.emptyState(), backup).state);
+  const store = fakeStorage();
+  L.saveWorkspace(store, ws);
+  const back = L.loadWorkspace(store);
+  assertEqual(back, ws);
+  assertEqual(L.parseAnyBackup(L.exportWorkspace(ws, 0)).ws, ws, 'through a backup too');
+});
+
 test('exportWorkspace round-trips through parseAnyBackup', () => {
   let ws = wsWith('Work');
   ws = L.updateSection(ws, ws.activeId, sample());
@@ -448,7 +462,7 @@ test('parseAnyBackup cleans sections', () => {
     sections: [
       { id: 's1', name: ' Work ', wheel: [{ id: 'a', name: 'A' }] },
       { id: 's1', name: 'Same id' },
-      { id: 's2', name: 'work', wheel: [{ id: 'a', name: 'Same item id' }, { id: 'b', name: 'B' }] },
+      { id: 's2', name: 'work', wheel: [{ id: 'a', name: 'Same item id' }, { id: 'b', name: 'B' }, { id: 'b', name: 'Repeat' }] },
       { id: 's3', name: '' },
       { name: 'No id' },
       'junk',
@@ -456,7 +470,7 @@ test('parseAnyBackup cleans sections', () => {
   }));
   assertEqual(sectionNames(r.ws), ['Work', 'work 2']);
   assertEqual(r.ws.activeId, 's1');
-  assertEqual(names(r.ws.sections[1].wheel), ['B'], 'item ids unique across sections');
+  assertEqual(names(r.ws.sections[1].wheel), ['Same item id', 'B'], 'item ids unique within a section only');
   assertEqual(r.ws.sections[1].pile, []);
 });
 
