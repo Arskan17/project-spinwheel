@@ -4,7 +4,7 @@ title: Sections
 description: Separate spaces (Work, Home…), each with its own wheel, swipe deck and Working on & done tickets, picked from a list on the left.
 tags: [feature, sections]
 status: draft
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-27T12:35:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-27T14:10:00Z }
 verified: { by: process:headless-chromium-check, at: 2026-11-27T12:20:00Z }
 sources:
   - { id: app, resource: ../../app.js, title: app.js }
@@ -46,7 +46,7 @@ it's a sideways-scrolling strip of pills above the stage; under 520 px the
 
 # Checked
 
-44 logic tests (11 for sections) and a headless Chromium run covering
+45 logic tests (12 for sections) and a headless Chromium run covering
 migration, create/duplicate-name error/rename/delete/switch, swipe within a
 section, export, merge import, reload, and spinning (nav inert), with
 screenshots at 1440, 960, 400 and 360 px. Not loaded as an actual extension.

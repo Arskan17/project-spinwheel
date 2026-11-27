@@ -3,7 +3,7 @@ type: Data Model
 title: Data model
 description: Shape of the workspace, sections, wheel items and tickets, and the rules each field follows.
 tags: [architecture, state, sections]
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-27T12:35:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-27T14:10:00Z }
 sources:
   - { id: logic, resource: ../../logic.js, title: logic.js }
 ---
@@ -31,7 +31,7 @@ A section's `{ wheel, pile }` is exactly the pre-sections state, so
 
 | Field | Rule |
 |---|---|
-| `id` | `crypto.randomUUID()`, fallback time + random. Kept unique when loading/importing (across sections too) |
+| `id` | `crypto.randomUUID()`, fallback time + random. Section ids unique. Item ids unique **within a section only**: the same item id can sit in two sections (e.g. one backup imported into both), so never dedupe item ids across sections — that once emptied sections on reload (PR #6 review) |
 | `name` (project) | Trimmed, cut to 60 chars (`MAX_NAME_LENGTH`), case-insensitive unique **within a wheel** |
 | `name` (section) | Same cleaning; duplicates on import get " 2", " 3"… appended |
 | `pile` order | Newest pick first; merges re-sort by `pickedAt` |

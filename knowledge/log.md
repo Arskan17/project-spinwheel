@@ -3,6 +3,7 @@
 ## 2026-11-27
 * **Creation**: Wrote this knowledge bundle (OKF v0.2) covering everything up to sections.
 * **Update**: Added [sections](/features/sections.md): several wheels, each with its own pile, plus v2 backups. Branch `ao/project-spinwheel-5/sections`, not merged yet.
+* **Fix**: Review of PR #6 found that loading deduped item ids across sections, emptying a section that shared ids with another. Ids are now unique per section; see [data model](/architecture/data-model.md).
 * **Finding**: PR #5 (Chrome sync) was merged into the `chrome-extension` branch after that branch had already gone into `main`, so it is not on `main`. See [Chrome sync](/features/chrome-sync.md).
 
 ## 2026-11-26

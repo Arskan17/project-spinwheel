@@ -3,7 +3,7 @@ type: Playbook
 title: Run and test
 description: How to serve the spinwheel on the headless dev server so the owner can open it, and how to run the logic tests.
 tags: [workflow, testing, dev-server]
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-27T12:35:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-27T14:10:00Z }
 sources:
   - { id: readme, resource: ../../README.md, title: README }
   - { id: claude-md, resource: ~/.claude/CLAUDE.md, title: Owner's machine notes }
@@ -29,7 +29,7 @@ the owner **can't open localhost**.[^claude-md]
 node --input-type=module -e "globalThis.print = console.log; await import('./tests.js')"
 ```
 
-Last line is `PASS <n>` or `FAIL <n>` (44 tests as of 2026-11-27). The
+Last line is `PASS <n>` or `FAIL <n>` (45 tests as of 2026-11-27). The
 harness is hand-rolled in `tests.js` (`test`, `assertEqual`, `assert`,
 `fakeStorage`); add new tests above `// ---- report ----`.
 `tests.html` runs the same file in a browser. Only `logic.js` is unit
