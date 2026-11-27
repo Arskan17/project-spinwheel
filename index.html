@@ -18,7 +18,21 @@
   </header>
 
   <main class="booth">
-    <section class="stage" aria-label="Pick a project">
+    <nav class="sections" id="sections" aria-labelledby="sections-heading">
+      <h2 id="sections-heading">Sections</h2>
+      <ul class="section-list" id="section-list"></ul>
+      <button type="button" class="section-new" id="section-new">+ New section</button>
+    </nav>
+
+    <section class="stage" aria-labelledby="section-title">
+      <div class="section-head">
+        <h2 class="section-title" id="section-title"></h2>
+        <div class="section-tools">
+          <button type="button" id="section-rename">Rename</button>
+          <button type="button" id="section-delete">Delete</button>
+        </div>
+      </div>
+
       <div class="modes" role="group" aria-label="How to pick">
         <button type="button" class="mode" id="mode-spin" data-mode="spin" aria-pressed="true">Spin</button>
         <button type="button" class="mode" id="mode-swipe" data-mode="swipe" aria-pressed="false">Swipe</button>
@@ -73,7 +87,7 @@
 
       <section class="backup" aria-labelledby="backup-heading">
         <h2 id="backup-heading">Backup &amp; import</h2>
-        <p class="backup-hint">Export saves everything to a .json file. Import takes that file back, or a list of project names, one per line (.txt or .csv).</p>
+        <p class="backup-hint">Export saves every section to a .json file. Import takes that file back, or a list of project names, one per line (.txt or .csv), which go into this section.</p>
         <div class="backup-row">
           <button type="button" id="export">Export</button>
           <button type="button" id="import">Import…</button>
@@ -99,11 +113,36 @@
     <form method="dialog">
       <p class="result-lead">Import backup</p>
       <h2 class="import-title" id="import-title"></h2>
-      <p class="import-text" id="import-text">Merge keeps your projects and adds the new ones. Replace swaps everything here for what’s in the file.</p>
+      <p class="import-text" id="import-text"></p>
       <div class="result-actions">
         <button class="primary" value="merge" autofocus>Merge</button>
         <button value="replace">Replace</button>
         <button value="cancel">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="result" id="section-dialog" aria-labelledby="section-dialog-title">
+    <form method="dialog" id="section-form" autocomplete="off">
+      <p class="result-lead" id="section-dialog-lead">New section</p>
+      <label class="section-label" id="section-dialog-title" for="section-name">Name it</label>
+      <input class="section-input" id="section-name" maxlength="60" placeholder="Work, Home, Side quests…" enterkeyhint="done">
+      <p class="section-error" id="section-error" role="status"></p>
+      <div class="result-actions">
+        <button class="primary" value="save" id="section-save">Create</button>
+        <button value="cancel" formnovalidate>Cancel</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="result" id="delete-dialog" aria-labelledby="delete-title" aria-describedby="delete-text">
+    <form method="dialog">
+      <p class="result-lead">Delete section</p>
+      <h2 class="import-title" id="delete-title"></h2>
+      <p class="import-text" id="delete-text"></p>
+      <div class="result-actions">
+        <button class="primary" value="delete">Delete</button>
+        <button value="cancel" autofocus>Keep it</button>
       </div>
     </form>
   </dialog>
