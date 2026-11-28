@@ -1,7 +1,9 @@
 import {
   addProject, removeProject, confirmPick, toggleDone, returnToWheel,
-  loadState, saveState, STORAGE_KEY,
-  exportState, exportFileName, parseBackup, mergeBackup, parseNameList, addNames,
+  WORKSPACE_KEY, loadWorkspace, saveWorkspace, activeSection, selectSection, updateSection,
+  addSection, renameSection, removeSection, isEmptySection, isBlankWorkspace,
+  exportWorkspace, exportFileName, parseAnyBackup, mergeBackup, mergeWorkspace,
+  parseNameList, addNames,
   drawCard,
   pickIndex, targetRotation, indexAtPointer, sliceColors, easeOutCubic,
 } from './logic.js';
@@ -33,13 +35,21 @@ const el = {
   deck: $('deck'), card: $('card'), cardName: $('card-name'), deckEmpty: $('deck-empty'),
   deckActions: $('deck-actions'), deckYes: $('deck-yes'), deckNo: $('deck-no'),
   backupStatus: $('backup-status'), importDialog: $('import-dialog'), importTitle: $('import-title'),
+  importText: $('import-text'),
+  sectionsNav: $('sections'), sectionList: $('section-list'), sectionNew: $('section-new'),
+  sectionTitle: $('section-title'), sectionRename: $('section-rename'), sectionDelete: $('section-delete'),
+  sectionDialog: $('section-dialog'), sectionForm: $('section-form'), sectionLead: $('section-dialog-lead'),
+  sectionName: $('section-name'), sectionError: $('section-error'), sectionSave: $('section-save'),
+  deleteDialog: $('delete-dialog'), deleteTitle: $('delete-title'), deleteText: $('delete-text'),
 };
 
 const storage = (() => { try { return window.localStorage; } catch { return null; } })();
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 const dateFmt = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' });
 
-let state = loadState(storage);
+// The workspace holds every section; `state` is the active one's { wheel, pile }.
+let ws = loadWorkspace(storage);
+let state = activeSection(ws);
 let rotation = 0;
 let spinning = false;
 let arrivingId = null;
@@ -57,9 +67,16 @@ function rand() {
 
 // ---------- State changes ----------
 
+// Change the active section.
 function commit(next, message) {
-  state = next;
-  const saved = saveState(storage, state);
+  commitWs(updateSection(ws, ws.activeId, next), message);
+}
+
+// Change the workspace (sections, which one is active, or their contents).
+function commitWs(next, message) {
+  ws = next;
+  state = activeSection(ws);
+  const saved = saveWorkspace(storage, ws);
   el.saveNote.textContent = saved
     ? 'Saved in this browser.'
     : 'This browser blocks saving, so changes last only until you close the tab.';
@@ -71,6 +88,7 @@ function commit(next, message) {
 // ---------- Rendering ----------
 
 function render() {
+  renderSections();
   renderWheelList();
   renderPile();
   const n = state.wheel.length;
@@ -88,6 +106,38 @@ function make(tag, props = {}, children = []) {
   const node = Object.assign(document.createElement(tag), props);
   node.append(...children);
   return node;
+}
+
+const working = (s) => s.pile.filter((p) => !p.done).length;
+
+function renderSections() {
+  const active = activeSection(ws);
+  el.sectionList.replaceChildren(...ws.sections.map((s) => {
+    const btn = make('button', { type: 'button', className: 'section-pick' }, [
+      make('span', { className: 'section-name', textContent: s.name }),
+      make('span', {
+        className: 'section-meta',
+        textContent: `${s.wheel.length} on the wheel · ${working(s)} working`,
+      }),
+    ]);
+    btn.dataset.id = s.id;
+    if (s.id === active.id) btn.setAttribute('aria-current', 'true');
+    return make('li', {}, [btn]);
+  }));
+  el.sectionTitle.textContent = active.name;
+  el.sectionDelete.hidden = ws.sections.length < 2;
+  revealActiveSection();
+}
+
+// In the narrow strip, scroll the active pill into view (sideways only, so
+// the page itself doesn't jump).
+function revealActiveSection() {
+  const pill = el.sectionList.querySelector('[aria-current="true"]');
+  if (!pill) return;
+  const list = el.sectionList.getBoundingClientRect();
+  const box = pill.getBoundingClientRect();
+  if (box.left < list.left) el.sectionList.scrollLeft -= list.left - box.left + 8;
+  else if (box.right > list.right) el.sectionList.scrollLeft += box.right - list.right + 8;
 }
 
 function renderWheelList() {
@@ -406,6 +456,14 @@ function drawWheel(now = performance.now()) {
 
 // ---------- Spinning ----------
 
+// While the wheel spins, the lists and section controls can't be used.
+function setBusy(busy) {
+  el.side.inert = busy;
+  el.sectionsNav.inert = busy;
+  el.sectionRename.disabled = busy;
+  el.sectionDelete.disabled = busy;
+}
+
 function tickPointer() {
   el.pointer.classList.remove('tick');
   void el.pointer.offsetWidth; // restart the animation
@@ -423,7 +481,7 @@ function spin() {
   const duration = reducedMotion.matches ? SPIN_MS_REDUCED : SPIN_MS;
 
   spinning = true;
-  el.side.inert = true;
+  setBusy(true);
   el.spin.setAttribute('aria-disabled', 'true');
 
   const t0 = performance.now();
@@ -446,7 +504,7 @@ function spin() {
 function finishSpin(pickedId, to) {
   rotation = to % TAU;
   spinning = false;
-  el.side.inert = false;
+  setBusy(false);
   render();
   const picked = state.wheel.find((p) => p.id === pickedId);
   if (!picked) return;
@@ -528,6 +586,11 @@ el.pileList.addEventListener('click', (e) => {
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const describe = (s) => `${s.wheel.length} on the wheel, ${plural(s.pile.length, 'ticket')}`;
+function describeWs(w) {
+  const wheel = w.sections.reduce((n, s) => n + s.wheel.length, 0);
+  const pile = w.sections.reduce((n, s) => n + s.pile.length, 0);
+  return `${plural(w.sections.length, 'section')} with ${wheel} on the wheel and ${plural(pile, 'ticket')}`;
+}
 
 function setStatus(message, isError = false) {
   el.backupStatus.textContent = message;
@@ -536,14 +599,14 @@ function setStatus(message, isError = false) {
 
 el.exportBtn.addEventListener('click', () => {
   const now = new Date();
-  const blob = new Blob([exportState(state, now.getTime())], { type: 'application/json' });
+  const blob = new Blob([exportWorkspace(ws, now.getTime())], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const link = make('a', { href: url, download: exportFileName(now) });
   document.body.append(link);
   link.click();
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 0);
-  setStatus(`Exported ${describe(state)}.`);
+  setStatus(`Exported ${describeWs(ws)}.`);
 });
 
 el.importBtn.addEventListener('click', () => el.importFile.click());
@@ -572,44 +635,74 @@ el.importFile.addEventListener('change', async () => {
 });
 
 function importBackup(text) {
-  const incoming = parseBackup(text);
-  if (!incoming) {
+  const parsed = parseAnyBackup(text);
+  if (!parsed) {
     setStatus('That file isn’t a spinwheel backup.', true);
     return;
   }
-  if (!incoming.wheel.length && !incoming.pile.length) {
-    setStatus('That backup has no projects in it.', true);
-    return;
+  const section = activeSection(ws);
+  if (parsed.kind === 'single') {
+    const incoming = parsed.state;
+    if (isEmptySection(incoming)) {
+      setStatus('That backup has no projects in it.', true);
+      return;
+    }
+    if (isEmptySection(section)) {
+      commit(incoming);
+      setStatus(`Imported ${describe(incoming)} into “${section.name}”.`);
+      return;
+    }
+    el.importTitle.textContent = describe(incoming);
+    el.importText.textContent = `This backup is from before sections. Merge adds its projects to “${section.name}”. `
+      + `Replace swaps what’s in “${section.name}” for it. Your other sections stay as they are.`;
+  } else {
+    if (isBlankWorkspace(ws)) {
+      replaceWorkspace(parsed.ws);
+      setStatus(`Imported ${describeWs(parsed.ws)}.`);
+      return;
+    }
+    el.importTitle.textContent = describeWs(parsed.ws);
+    el.importText.textContent = 'Merge keeps your sections and adds what’s new: a section with the same name '
+      + 'gets the new projects, the others come in as new sections. Replace swaps all your sections for the ones in the file.';
   }
-  if (!state.wheel.length && !state.pile.length) {
-    commit(incoming);
-    setStatus(`Imported ${describe(incoming)}.`);
-    return;
-  }
-  pendingImport = incoming;
-  el.importTitle.textContent = describe(incoming);
+  pendingImport = parsed;
   el.importDialog.returnValue = '';
   el.importDialog.showModal();
 }
 
+function mergeStatus(added, skipped, addedSections = 0) {
+  if (!added && !addedSections) return 'Nothing new: everything in that backup is already here.';
+  const sections = addedSections ? ` in ${plural(addedSections, 'new section')}` : '';
+  const already = skipped ? ` ${skipped} ${skipped === 1 ? 'was' : 'were'} already here.` : '';
+  return `Added ${plural(added, 'project')}${sections} from the backup.${already}`;
+}
+
 el.importDialog.addEventListener('close', () => {
-  const incoming = pendingImport;
+  const parsed = pendingImport;
   pendingImport = null;
-  if (!incoming) return;
+  if (!parsed) return;
   const choice = el.importDialog.returnValue;
-  if (choice === 'replace') {
-    commit(incoming);
-    setStatus(`Replaced with the backup: ${describe(incoming)}.`);
-  } else if (choice === 'merge') {
-    const total = incoming.wheel.length + incoming.pile.length;
-    const { state: next, added } = mergeBackup(state, incoming);
-    commit(next);
-    const skipped = total - added;
-    setStatus(added
-      ? `Added ${plural(added, 'project')} from the backup.${skipped ? ` ${skipped} ${skipped === 1 ? 'was' : 'were'} already here.` : ''}`
-      : 'Nothing new: everything in that backup is already here.');
-  } else {
+  if (choice !== 'replace' && choice !== 'merge') {
     setStatus('Import cancelled.');
+  } else if (parsed.kind === 'single') {
+    const incoming = parsed.state;
+    const name = activeSection(ws).name;
+    if (choice === 'replace') {
+      commit(incoming);
+      setStatus(`Replaced “${name}” with the backup: ${describe(incoming)}.`);
+    } else {
+      const { state: next, added } = mergeBackup(state, incoming);
+      commit(next);
+      setStatus(mergeStatus(added, incoming.wheel.length + incoming.pile.length - added));
+    }
+  } else if (choice === 'replace') {
+    replaceWorkspace(parsed.ws);
+    setStatus(`Replaced with the backup: ${describeWs(parsed.ws)}.`);
+  } else {
+    const total = parsed.ws.sections.reduce((n, s) => n + s.wheel.length + s.pile.length, 0);
+    const { ws: next, added, addedSections } = mergeWorkspace(ws, parsed.ws);
+    commitWs(next);
+    setStatus(mergeStatus(added, total - added, addedSections));
   }
   el.importBtn.focus();
 });
@@ -621,13 +714,114 @@ function importNames(text, csv) {
     return;
   }
   const { state: next, added, skipped } = addNames(state, names);
+  const where = `the “${activeSection(ws).name}” wheel`;
   if (!added) {
-    setStatus(`Nothing new: ${names.length === 1 ? 'that project is' : `all ${names.length} are`} already on the wheel.`);
+    setStatus(`Nothing new: ${names.length === 1 ? 'that project is' : `all ${names.length} are`} already on ${where}.`);
     return;
   }
   commit(next);
-  setStatus(`Added ${plural(added, 'project')} to the wheel.${skipped ? ` Skipped ${skipped} already on it.` : ''}`);
+  setStatus(`Added ${plural(added, 'project')} to ${where}.${skipped ? ` Skipped ${skipped} already on it.` : ''}`);
 }
+
+// ---------- Sections ----------
+
+// A fresh view for a different section: wheel at rest, new shuffle.
+function resetView() {
+  rotation = 0;
+  deck = [];
+  cardId = null;
+  el.addError.textContent = '';
+}
+
+function replaceWorkspace(next) {
+  resetView();
+  commitWs(next);
+}
+
+function focusActiveSection() {
+  el.sectionList.querySelector('[aria-current="true"]')?.focus();
+}
+
+function switchSection(id) {
+  if (spinning || flying || id === ws.activeId) return;
+  resetView();
+  commitWs(selectSection(ws, id), `Now in ${activeSection(ws).name}.`);
+}
+
+el.sectionList.addEventListener('click', (e) => {
+  const btn = e.target.closest('.section-pick');
+  if (!btn) return;
+  switchSection(btn.dataset.id);
+  focusActiveSection();
+});
+
+// One dialog names a new section or renames the current one.
+let sectionDialogMode = 'new';
+
+function openSectionDialog(dialogMode) {
+  if (spinning) return;
+  sectionDialogMode = dialogMode;
+  const renaming = dialogMode === 'rename';
+  el.sectionLead.textContent = renaming ? 'Rename section' : 'New section';
+  el.sectionSave.textContent = renaming ? 'Rename' : 'Create';
+  el.sectionName.value = renaming ? activeSection(ws).name : '';
+  el.sectionError.textContent = '';
+  el.sectionDialog.returnValue = '';
+  el.sectionDialog.showModal();
+  el.sectionName.select();
+}
+
+el.sectionNew.addEventListener('click', () => openSectionDialog('new'));
+el.sectionRename.addEventListener('click', () => openSectionDialog('rename'));
+el.sectionName.addEventListener('input', () => { el.sectionError.textContent = ''; });
+
+el.sectionForm.addEventListener('submit', (e) => {
+  if (e.submitter?.value === 'cancel') return;
+  const typed = el.sectionName.value;
+  const renaming = sectionDialogMode === 'rename';
+  const r = renaming ? renameSection(ws, ws.activeId, typed) : addSection(ws, typed);
+  if (r.error) {
+    e.preventDefault();
+    el.sectionError.textContent = r.error === 'empty'
+      ? 'Give the section a name first.'
+      : `There’s already a section called “${typed.trim()}”.`;
+    el.sectionName.focus();
+    return;
+  }
+  if (!renaming) resetView();
+  commitWs(r.ws, renaming
+    ? `Section renamed to ${activeSection(r.ws).name}.`
+    : `${activeSection(r.ws).name} created. Add projects to its wheel.`);
+});
+
+el.sectionDialog.addEventListener('close', () => {
+  if (el.sectionDialog.returnValue !== 'save') return;
+  if (sectionDialogMode === 'new') el.input.focus();
+  else el.sectionRename.focus();
+});
+
+el.sectionDelete.addEventListener('click', () => {
+  if (spinning || ws.sections.length < 2) return;
+  const section = activeSection(ws);
+  el.deleteTitle.textContent = `“${section.name}”`;
+  el.deleteText.textContent = isEmptySection(section)
+    ? 'It’s empty, so nothing else goes with it.'
+    : `Everything in it goes too (${describe(section)}). This can’t be undone, so export first if you might want it back.`;
+  el.deleteDialog.dataset.id = section.id;
+  el.deleteDialog.returnValue = '';
+  el.deleteDialog.showModal();
+});
+
+el.deleteDialog.addEventListener('close', () => {
+  const id = el.deleteDialog.dataset.id;
+  if (el.deleteDialog.returnValue !== 'delete') return;
+  const gone = ws.sections.find((s) => s.id === id);
+  if (!gone) return;
+  const next = removeSection(ws, id);
+  resetView();
+  commitWs(next, `${gone.name} deleted. Now in ${activeSection(next).name}.`);
+  focusActiveSection();
+});
 
 // In the Chrome extension the page runs in the side panel; offer the big
 // wheel in a tab. Tabs opened from here carry ?view=tab and skip the link.
@@ -638,8 +832,12 @@ if (location.protocol === 'chrome-extension:'
 
 // Keep two open tabs (or the side panel and a tab) in step.
 window.addEventListener('storage', (e) => {
-  if (e.key !== STORAGE_KEY || spinning) return;
-  state = loadState(storage);
+  if (e.key !== WORKSPACE_KEY || spinning) return;
+  // Each window keeps showing its own section if it still exists.
+  const fresh = selectSection(loadWorkspace(storage), ws.activeId);
+  if (fresh.activeId !== ws.activeId) resetView();
+  ws = fresh;
+  state = activeSection(ws);
   render();
 });
 

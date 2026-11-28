@@ -117,12 +117,34 @@ button { cursor: pointer; }
   padding: 0 clamp(1rem, 4vw, 3rem) 4rem;
 }
 
+.booth { grid-template-areas: "nav" "stage" "side"; }
+.sections { grid-area: nav; }
+.stage { grid-area: stage; }
+.side { grid-area: side; }
+
 @media (min-width: 860px) {
   .booth {
     grid-template-columns: auto minmax(18rem, 28rem);
+    grid-template-areas: "nav nav" "stage side";
+    row-gap: 1.5rem;
     align-items: start;
   }
   .stage {
+    position: sticky;
+    top: 1.5rem;
+  }
+}
+
+/* Wide: the sections get their own column on the left. */
+@media (min-width: 1100px) {
+  .booth {
+    max-width: 96rem;
+    grid-template-columns: minmax(11rem, 15rem) auto minmax(18rem, 26rem);
+    grid-template-areas: "nav stage side";
+    column-gap: clamp(1.5rem, 3vw, 3.5rem);
+  }
+  .masthead { max-width: 96rem; }
+  .sections {
     position: sticky;
     top: 1.5rem;
   }
@@ -146,6 +168,10 @@ button { cursor: pointer; }
 
 @media (min-width: 860px) {
   .wheel { width: min(78vh, 46vw, 760px); }
+}
+
+@media (min-width: 1100px) {
+  .wheel { width: min(78vh, 40vw, 720px); }
 }
 
 .wheel canvas {
@@ -731,4 +757,181 @@ button { cursor: pointer; }
   text-align: center;
   color: var(--haze);
   font-size: 0.9rem;
+}
+
+/* ---------- Sections ---------- */
+
+.sections {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+/* Side-panel width: the label goes; the pills scroll sideways. */
+@media (max-width: 520px) {
+  .sections h2 {
+    position: absolute;
+    width: 1px; height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+.sections h2 {
+  flex: none;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--haze);
+}
+
+.section-list {
+  display: flex;
+  gap: 0.4rem;
+  min-width: 0;
+  padding: 0.25rem;
+  list-style: none;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.section-list > li { flex: none; }
+
+.section-pick {
+  display: grid;
+  max-width: 14rem;
+  padding: 0.4rem 0.95rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--booth);
+  color: var(--haze);
+  font-weight: 700;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.section-pick:hover { background: var(--booth-raised); color: var(--ticket); }
+
+.section-pick[aria-current="true"] {
+  background: var(--bulb);
+  color: var(--ink);
+}
+
+.section-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.section-meta { display: none; }
+
+.section-new {
+  flex: none;
+  padding: 0.35rem 0.9rem;
+  border: 2px dashed rgb(201 195 238 / 0.5);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--haze);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.section-new:hover { border-color: var(--haze); color: var(--ticket); }
+
+@media (min-width: 1100px) {
+  .sections {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+  .section-list {
+    flex-direction: column;
+    padding: 0;
+    overflow: visible;
+  }
+  .section-pick {
+    width: 100%;
+    max-width: none;
+    padding: 0.6rem 0.9rem;
+    border-radius: 0.5rem;
+    white-space: normal;
+  }
+  .section-name { overflow-wrap: anywhere; }
+  .section-meta {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 500;
+    opacity: 0.8;
+  }
+  .section-new { padding: 0.55rem 0.9rem; border-radius: 0.5rem; }
+}
+
+.section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.25rem 1rem;
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.section-title {
+  font-size: var(--step-2);
+  font-weight: 800;
+  font-stretch: 80%;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.section-tools {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.section-tools button {
+  padding: 0.2rem 0.5rem;
+  border: 0;
+  border-radius: 0.35rem;
+  background: transparent;
+  color: var(--haze);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.section-tools button:hover { background: var(--booth); color: var(--ticket); }
+.section-tools button[hidden] { display: none; }
+
+/* New / rename dialog */
+
+.section-label {
+  display: block;
+  margin: 0.25rem 0 0.75rem;
+  font-size: var(--step-2);
+  font-weight: 800;
+  font-stretch: 80%;
+  line-height: 1.1;
+}
+
+.section-input {
+  width: 100%;
+  padding: 0.7rem 0.9rem;
+  border: 2px solid var(--ink);
+  border-radius: 0.5rem;
+  background: #fffaf0;
+  color: var(--ink);
+}
+
+.section-input:focus-visible { outline-offset: 2px; }
+
+.section-error {
+  min-height: 1.5em;
+  margin: 0.4rem 0 1rem;
+  color: #B3321C;
+  font-size: 0.9rem;
+  font-weight: 600;
 }
